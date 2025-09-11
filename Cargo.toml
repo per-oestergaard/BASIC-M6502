@@ -1,0 +1,3 @@
+[workspace]
+members = ["emu6502","assembler6502"]
+resolver = "2"

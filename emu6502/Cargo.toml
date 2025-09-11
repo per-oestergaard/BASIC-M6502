@@ -1,0 +1,16 @@
+[package]
+name = "emu6502"
+version = "0.1.0"
+edition = "2021"
+authors = ["BASIC-M6502 Project"]
+license = "MIT OR Apache-2.0"
+
+[lib]
+name = "emu6502"
+path = "src/lib.rs"
+
+[dependencies]
+bitflags = "2"
+
+[dev-dependencies]
+hex = "0.4"

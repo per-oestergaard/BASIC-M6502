@@ -1,0 +1,28 @@
+{
+  "name": "basic-m6502-rust",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/rust:1": {
+      "version": "stable"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "rust-analyzer.cargo.features": "all"
+      },
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "ms-vscode.makefile-tools",
+        "tamasfe.even-better-toml",
+        "serayuzgur.crates"
+      ]
+    }
+  },
+  "postCreateCommand": "bash scripts/postCreate.sh",
+  "remoteUser": "vscode"
+}

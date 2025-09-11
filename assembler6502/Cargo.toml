@@ -1,0 +1,10 @@
+[package]
+name = "assembler6502"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.99"
+thiserror = "2.0.16"
+lazy_static = "1"
+regex = "1"

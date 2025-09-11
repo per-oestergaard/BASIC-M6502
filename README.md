@@ -72,7 +72,7 @@ The source code includes conditional compilation support for multiple pioneering
 The source code includes detailed revision history showing active development:
 
 - **July 27, 1978**: Fixed critical bugs in FOR loop variable handling and statement parsing
-- **July 1, 1978**: Memory optimization and garbage collection improvements  
+- **July 1, 1978**: Memory optimization and garbage collection improvements
 - **March 9, 1978**: Enhanced string function capabilities
 - **February 25, 1978**: Input flag corrections and numeric precision improvements
 - **February 11, 1978**: Reserved word parsing enhancements
@@ -134,3 +134,26 @@ This source code represents the foundation upon which the modern software indust
 ---
 
 *This document represents a crucial piece of computing history - the source code that helped launch the personal computer revolution and established Microsoft as a software industry leader.*
+
+## Development Environment (Modern Port Effort)
+
+This repository now includes a dev container to support:
+
+- Original assembly exploration (with a planned translation pipeline to a modern assembler)
+- Rust (stable) for the incremental re-implementation of the interpreter
+
+### Quick Start (Dev Container)
+
+1. Open in VS Code and select: Reopen in Container.
+2. After build, verify toolchain via `scripts/postCreate.sh` (runs automatically).
+3. Run `bash scripts/build_original.sh` (currently a stub; exits non-zero until translation implemented).
+
+### Porting Roadmap (High-Level)
+
+1. Provide translation of legacy assembler macros to ca65.
+2. Produce reference binary / behavioral tests (parsing, expression eval, PRINT, variables).
+3. Scaffold Rust crate replicating memory model + tokenizer.
+4. Add incremental test batches mapping original behavior to Rust.
+5. Expand until full BASIC feature set covered.
+
+See `docs/ASSEMBLY_PORTING_NOTES.md` for ongoing details.
