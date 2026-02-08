@@ -1,0 +1,156 @@
+# Testing the BASIC Interpreter
+
+This document describes the testing infrastructure for step 3 of the porting process: testing the current (non-Rust) Microsoft BASIC interpreter.
+
+## Overview
+
+The test infrastructure is designed to:
+1. Validate basic BASIC interpreter functionality
+2. Work with the 6502 emulator harness
+3. Support running once the interpreter binary is built
+4. Provide clear examples for adding more tests
+
+## Test Structure
+
+### Test Programs (`tests/basic_programs/`)
+
+Test programs consist of:
+- `*.bas` files containing BASIC source code
+- `*.expected` files containing the expected output
+
+Example:
+```
+tests/basic_programs/
+├── hello.bas          # 10 PRINT "HELLO WORLD"
+└── hello.expected     # HELLO WORLD
+```
+
+### Integration Tests (`emu6502/tests/interpreter_tests.rs`)
+
+The integration test suite:
+1. Checks if the interpreter binary exists at `build/original/basic.bin`
+2. If available, loads it into the 6502 emulator
+3. Runs each test program
+4. Compares actual output with expected output
+5. If not available, tests are skipped with informative messages
+
+## Running Tests
+
+### Run All Tests
+```bash
+cargo test --workspace
+```
+
+### Run Only Interpreter Tests
+```bash
+# Using the convenience script
+bash scripts/run_interpreter_tests.sh
+
+# Or directly
+cargo test -p emu6502 --test interpreter_tests
+```
+
+### Run with Verbose Output
+```bash
+cargo test -p emu6502 --test interpreter_tests -- --nocapture
+```
+
+## Current Test Status
+
+**As of now:** The interpreter binary is not yet built, so tests are skipped.
+
+**Expected behavior:**
+- Tests show: `SKIP: <test_name> (interpreter not built yet at ...)`
+- The test framework is ready to run once the binary is available
+- Building requires completing the assembly translation (step 2)
+
+## Adding New Tests
+
+To add a new test:
+
+1. Create a BASIC program file in `tests/basic_programs/`:
+   ```basic
+   # tests/basic_programs/my_test.bas
+   10 PRINT "TEST"
+   20 END
+   ```
+
+2. Create the expected output file:
+   ```
+   # tests/basic_programs/my_test.expected
+   TEST
+   ```
+
+3. Add a test function in `emu6502/tests/interpreter_tests.rs`:
+   ```rust
+   #[test]
+   fn test_my_test() {
+       test_basic_program("my_test");
+   }
+   ```
+
+4. Run the tests:
+   ```bash
+   cargo test -p emu6502 --test interpreter_tests
+   ```
+
+## Test Categories
+
+Current tests cover:
+
+### Basic Output
+- `hello.bas` - Simple PRINT statement
+
+### Arithmetic
+- `arithmetic.bas` - Addition, subtraction, multiplication, division
+
+### Variables
+- `variables.bas` - Variable assignment and use
+
+### Control Flow
+- `for_loop.bas` - FOR/NEXT loops
+- `conditional.bas` - IF/THEN statements
+
+## Future Enhancements
+
+When the interpreter is available, consider adding tests for:
+- String operations
+- Arrays
+- More complex expressions
+- Error handling
+- Multiple statement types
+- Nested loops
+- Subroutines (GOSUB/RETURN)
+- Mathematical functions (SIN, COS, etc.)
+
+## Integration with Build System
+
+The test infrastructure integrates with:
+1. **Cargo** - Standard Rust test framework
+2. **Build scripts** - `scripts/build_original.sh` for building the interpreter
+3. **CI/CD** - Ready for continuous integration pipelines
+
+## Troubleshooting
+
+### Tests are being skipped
+**Cause:** Interpreter binary not found
+**Solution:** Complete step 2 (assembly translation and build)
+
+### Tests fail with "I/O error"
+**Cause:** Binary file exists but can't be read
+**Solution:** Check file permissions on `build/original/basic.bin`
+
+### Tests fail with "Execution error"
+**Cause:** Interpreter loaded but crashed/timed out
+**Solution:** Check cycle budget, verify binary is correct format
+
+## Design Notes
+
+The test harness uses `emu6502::BasicHarness` which:
+- Provides a 6502 CPU emulator
+- Supports memory-mapped I/O hooks for output capture
+- Can load binary images at specified addresses
+- Has configurable cycle budgets to prevent infinite loops
+- Allows queuing input for interactive programs (future enhancement)
+
+This approach allows testing the actual 6502 machine code without requiring real hardware.
