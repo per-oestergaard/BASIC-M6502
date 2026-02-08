@@ -1,0 +1,16 @@
+[package]
+name = "emu6502"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[lib]
+name = "emu6502"
+path = "src/lib.rs"
+
+[[test]]
+name = "interpreter_tests"
+path = "tests/interpreter_tests.rs"
+
+[dependencies]

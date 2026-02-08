@@ -1,0 +1,16 @@
+10 REM Function Test Program
+20 REM Tests built-in BASIC functions
+30 PRINT "FUNCTION TESTS"
+40 PRINT "=============="
+50 REM Absolute value
+60 PRINT ABS(-5)
+70 PRINT ABS(10)
+80 REM Integer function
+90 PRINT INT(3.7)
+100 PRINT INT(9.2)
+110 REM Square root
+120 PRINT SQR(4)
+130 PRINT SQR(9)
+140 REM Random number
+150 PRINT RND(1)
+160 PRINT "END OF FUNCTION TESTS"

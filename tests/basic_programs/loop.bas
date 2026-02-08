@@ -1,0 +1,19 @@
+10 REM Loop Test Program
+20 REM Tests FOR loops and iteration
+30 PRINT "LOOP TESTS"
+40 PRINT "=========="
+50 REM Simple counting loop
+60 FOR I = 1 TO 5
+70 PRINT I
+80 NEXT I
+90 REM Loop with step
+100 FOR J = 0 TO 10 STEP 2
+110 PRINT J
+120 NEXT J
+130 REM Nested loops
+140 FOR X = 1 TO 3
+150 FOR Y = 1 TO 2
+160 PRINT X*Y
+170 NEXT Y
+180 NEXT X
+190 PRINT "END OF LOOP TESTS"
