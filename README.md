@@ -150,10 +150,52 @@ This repository now includes a dev container to support:
 
 ### Porting Roadmap (High-Level)
 
-1. Provide translation of legacy assembler macros to ca65.
-2. Produce reference binary / behavioral tests (parsing, expression eval, PRINT, variables).
-3. Scaffold Rust crate replicating memory model + tokenizer.
-4. Add incremental test batches mapping original behavior to Rust.
-5. Expand until full BASIC feature set covered.
+1. ✓ Provide dev container with cc65 and Rust toolchain.
+2. Provide translation of legacy assembler macros to ca65.
+3. Produce reference binary / behavioral tests (parsing, expression eval, PRINT, variables).
+4. Scaffold Rust crate replicating memory model + tokenizer.
+5. Add incremental test batches mapping original behavior to Rust.
+6. Expand until full BASIC feature set covered.
 
 See `docs/ASSEMBLY_PORTING_NOTES.md` for ongoing details.
+
+## Testing
+
+This repository includes multiple layers of testing:
+
+### Step 1-2: Build Infrastructure Tests
+- Run the build script: `bash scripts/build_original.sh`
+- Currently expected to fail until assembly translation is complete
+
+### Step 3: Interpreter Tests (Current Implementation)
+Run interpreter tests using either:
+
+```bash
+# Run all tests including interpreter tests
+cargo test --workspace
+
+# Run only interpreter tests
+bash scripts/run_interpreter_tests.sh
+
+# Or directly
+cargo test -p emu6502 --test interpreter_tests
+```
+
+**Note:** Interpreter tests will skip execution if the interpreter binary is not yet built. 
+The test infrastructure is ready and will automatically run once `build/original/basic.bin` is available.
+
+Test programs are located in `tests/basic_programs/` with the following structure:
+- `*.bas` - BASIC source code
+- `*.expected` - Expected output for each test
+
+Current test programs:
+- `hello.bas` - Simple PRINT statement
+- `arithmetic.bas` - Basic arithmetic operations
+- `variables.bas` - Variable assignment and usage
+- `for_loop.bas` - FOR/NEXT loop
+- `conditional.bas` - IF/THEN statement
+
+### Step 4+: Rust Implementation Tests
+- Run unit tests: `cargo test --workspace`
+- Tests for the 6502 emulator are in `emu6502/src/lib.rs`
+- Tests for the BASIC harness are in `emu6502/src/harness.rs`
