@@ -130,7 +130,19 @@ When the interpreter is available, consider adding tests for:
 The test infrastructure integrates with:
 1. **Cargo** - Standard Rust test framework
 2. **Build scripts** - `scripts/build_original.sh` for building the interpreter
-3. **CI/CD** - Ready for continuous integration pipelines
+3. **CI/CD** - GitHub Actions workflow (`.github/workflows/ci.yml`) automatically runs tests on push and pull requests
+
+### Continuous Integration
+
+The CI workflow automatically:
+- Builds the project with `cargo build --workspace`
+- Runs all unit tests with `cargo test --workspace --lib`
+- Runs interpreter integration tests with `cargo test -p emu6502 --test interpreter_tests`
+- Reports test status (tests skip gracefully if interpreter binary is not available)
+
+The workflow runs on:
+- Push to `main`, `convert-to-rust`, or `copilot/**` branches
+- Pull requests to `main` or `convert-to-rust` branches
 
 ## Troubleshooting
 
