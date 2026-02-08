@@ -100,12 +100,14 @@ Current tests cover:
 
 ### Basic Output
 - `hello.bas` - Simple PRINT statement
+- `string.bas` - Multiple string PRINT statements
 
 ### Arithmetic
 - `arithmetic.bas` - Addition, subtraction, multiplication, division
 
 ### Variables
 - `variables.bas` - Variable assignment and use
+- `expressions.bas` - Variable expressions and arithmetic
 
 ### Control Flow
 - `for_loop.bas` - FOR/NEXT loops

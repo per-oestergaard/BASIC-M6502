@@ -190,8 +190,10 @@ Test programs are located in `tests/basic_programs/` with the following structur
 
 Current test programs:
 - `hello.bas` - Simple PRINT statement
+- `string.bas` - Multiple string PRINT statements
 - `arithmetic.bas` - Basic arithmetic operations
 - `variables.bas` - Variable assignment and usage
+- `expressions.bas` - Variable expressions and arithmetic
 - `for_loop.bas` - FOR/NEXT loop
 - `conditional.bas` - IF/THEN statement
 

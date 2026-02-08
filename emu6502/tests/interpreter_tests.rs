@@ -106,6 +106,16 @@ fn test_conditional() {
 }
 
 #[test]
+fn test_string() {
+    test_basic_program("string");
+}
+
+#[test]
+fn test_expressions() {
+    test_basic_program("expressions");
+}
+
+#[test]
 fn test_interpreter_binary_status() {
     // This test reports whether the interpreter binary exists
     // It always passes but provides useful information
