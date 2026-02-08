@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ main, 'convert-to-rust' ]
 
+# Set minimal permissions for the workflow
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Run Tests
