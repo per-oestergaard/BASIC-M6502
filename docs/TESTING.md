@@ -2,6 +2,20 @@
 
 This document describes the testing infrastructure for step 3 of the porting process: testing the current (non-Rust) Microsoft BASIC interpreter.
 
+## Quick Start
+
+Run all tests:
+```bash
+cargo test --workspace
+```
+
+Run only interpreter tests:
+```bash
+bash scripts/run_interpreter_tests.sh
+```
+
+**Note:** Tests will skip gracefully if the interpreter binary is not yet built. The test infrastructure is ready and waiting for the interpreter to be available at `build/original/basic.bin`.
+
 ## Overview
 
 The test infrastructure is designed to:
