@@ -184,14 +184,26 @@ cargo test -p emu6502 --test interpreter_tests
 **Note:** Interpreter tests will skip execution if the interpreter binary is not yet built. 
 The test infrastructure is ready and will automatically run once `build/original/basic.bin` is available.
 
+### Continuous Integration
+
+GitHub Actions automatically runs all tests on push and pull requests. The CI workflow:
+- Builds the project
+- Runs unit tests
+- Runs interpreter integration tests
+- Reports test status
+
+See `.github/workflows/ci.yml` for details.
+
 Test programs are located in `tests/basic_programs/` with the following structure:
 - `*.bas` - BASIC source code
 - `*.expected` - Expected output for each test
 
 Current test programs:
 - `hello.bas` - Simple PRINT statement
+- `string.bas` - Multiple string PRINT statements
 - `arithmetic.bas` - Basic arithmetic operations
 - `variables.bas` - Variable assignment and usage
+- `expressions.bas` - Variable expressions and arithmetic
 - `for_loop.bas` - FOR/NEXT loop
 - `conditional.bas` - IF/THEN statement
 

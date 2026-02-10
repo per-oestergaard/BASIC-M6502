@@ -1,0 +1,50 @@
+name: CI Tests
+
+on:
+  push:
+    branches: [ main, 'convert-to-rust', 'copilot/**' ]
+  pull_request:
+    branches: [ main, 'convert-to-rust' ]
+
+# Set minimal permissions for the workflow
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        toolchain: stable
+    
+    - name: Cache Cargo dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+    
+    - name: Build
+      run: cargo build --workspace --verbose
+    
+    - name: Run unit tests
+      run: cargo test --workspace --lib --verbose
+    
+    - name: Run integration tests (interpreter)
+      run: cargo test -p emu6502 --test interpreter_tests --verbose
+    
+    - name: Check interpreter test status
+      run: bash scripts/run_interpreter_tests.sh
+      continue-on-error: true

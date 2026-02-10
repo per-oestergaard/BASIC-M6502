@@ -15,10 +15,12 @@ Each `.bas` file represents a BASIC program with expected output documented in a
 These are minimal BASIC programs that test fundamental features:
 
 1. `hello.bas` - Simple PRINT statement
-2. `arithmetic.bas` - Basic arithmetic operations
-3. `variables.bas` - Variable assignment and usage
-4. `for_loop.bas` - FOR/NEXT loop
-5. `conditional.bas` - IF/THEN statement
+2. `string.bas` - Multiple string PRINT statements
+3. `arithmetic.bas` - Basic arithmetic operations
+4. `variables.bas` - Variable assignment and usage
+5. `expressions.bas` - Variable expressions and arithmetic
+6. `for_loop.bas` - FOR/NEXT loop
+7. `conditional.bas` - IF/THEN statement
 
 ## Running Tests
 
