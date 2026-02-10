@@ -1,0 +1,35 @@
+10 REM Numeric Sequence Test Program
+20 REM Tests numeric program sequencing and ordering
+30 PRINT "NUMERIC SEQUENCE TEST"
+40 PRINT "====================="
+50 REM Test proper line number ordering
+60 LET N = 1
+70 PRINT N
+80 LET N = 2
+90 PRINT N
+100 LET N = 3
+110 PRINT N
+120 LET N = 4
+130 PRINT N
+140 LET N = 5
+150 PRINT N
+160 REM Test 2-stage operational module
+170 REM Stage 1: Initialize variables
+180 LET STAGE1 = 100
+190 LET STAGE2 = 200
+200 PRINT "STAGE 1"
+210 PRINT STAGE1
+220 REM Stage 2: Process variables
+230 PRINT "STAGE 2"
+240 PRINT STAGE2
+250 LET RESULT = STAGE1+STAGE2
+260 PRINT "RESULT"
+270 PRINT RESULT
+280 REM Verify sequence execution
+290 LET SEQ1 = 10
+300 LET SEQ2 = 20
+310 LET SEQ3 = 30
+320 PRINT SEQ1
+330 PRINT SEQ2
+340 PRINT SEQ3
+350 PRINT "END OF SEQUENCE TEST"
