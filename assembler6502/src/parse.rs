@@ -16,7 +16,8 @@ pub enum Line {
 }
 
 lazy_static!{
-    static ref RE_LABEL:Regex=Regex::new(r"^(?P<label>[A-Za-z_.$][\w.$]*)::?\b").unwrap();
+    // Match label with one or more trailing ':' (allow double-colon) without using a word boundary that broke cases like 'LABEL: MNEM'.
+    static ref RE_LABEL:Regex=Regex::new(r"^(?P<label>[A-Za-z_.$][\w.$]*):+").unwrap();
     static ref RE_EQU:Regex=Regex::new(r"^(?P<name>[A-Za-z_.$][\w.$]*)\s*=\s*(?P<expr>.+)").unwrap();
     static ref RE_ORG_DOT:Regex=Regex::new(r"^\.org\s+\$?([0-9A-Fa-f]+)").unwrap();
     static ref RE_ORG_PLAIN:Regex=Regex::new(r"^ORG\s+([0-9]+|\$[0-9A-Fa-f]+)").unwrap();
@@ -68,6 +69,10 @@ pub fn lex_line(raw:&str)->Line{
         if mnem.ends_with(':') && parts.clone().next().is_none(){
             let lbl = mnem.trim_end_matches(':').to_string();
             return Line::Label(lbl);
+        }
+        let upper=mnem.to_ascii_uppercase();
+        if matches!(upper.as_str(), "IFN"|"IFE"|"IF1"|"IF2"|"IFNDEF") {
+            return Line::Empty; // preprocessor should have removed; guard against stragglers
         }
         let operand=parts.collect::<Vec<_>>().join(" ");
         let operand_opt=if operand.is_empty(){None}else{Some(operand)};

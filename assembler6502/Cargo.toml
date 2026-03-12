@@ -8,3 +8,7 @@ anyhow = "1.0.99"
 thiserror = "2.0.16"
 lazy_static = "1"
 regex = "1"
+
+[[bin]]
+name = "dump_pre"
+path = "src/bin/dump_pre.rs"
