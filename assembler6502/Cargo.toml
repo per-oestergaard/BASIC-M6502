@@ -10,5 +10,17 @@ lazy_static = "1"
 regex = "1"
 
 [[bin]]
+name = "asm"
+path = "src/bin/asm.rs"
+
+[[bin]]
+name = "dump_all"
+path = "src/bin/dump_all.rs"
+
+[[bin]]
+name = "dump_ifn"
+path = "src/bin/dump_ifn.rs"
+
+[[bin]]
 name = "dump_pre"
 path = "src/bin/dump_pre.rs"
