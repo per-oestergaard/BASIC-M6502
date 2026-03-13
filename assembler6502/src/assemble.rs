@@ -79,17 +79,26 @@ impl Assembler {
                     }
                     pc = pc.wrapping_add(bytes.len() as u16);
                 }
-                Line::DataWord { label, value: _ } => {
+                Line::DataWord { label, expr: _ } => {
                     if let Some(lab) = label {
                         define_symbol(&mut sym, lab, pc)?;
                     }
                     pc = pc.wrapping_add(2);
                 }
-                Line::Block { label, size } => {
+                Line::Block { label, expr } => {
                     if let Some(lab) = label {
                         define_symbol(&mut sym, lab, pc)?;
                     }
-                    pc = pc.wrapping_add(*size as u16);
+                    // Evaluate the expression to get the size
+                    let size = if let Ok(val) = expr.parse::<usize>() {
+                        val
+                    } else if let Ok(val) = eval_multi_symbol_expr(expr, &sym) {
+                        val as usize
+                    } else {
+                        // If symbol not yet defined, assume 0 for now (will be resolved in later passes)
+                        0
+                    };
+                    pc = pc.wrapping_add(size as u16);
                 }
                 _ => {}
             }
@@ -128,7 +137,7 @@ impl Assembler {
         pc = self.opts.start_org.unwrap_or(0);
         let mut out: Vec<u8> = Vec::new();
         let mut fixups: Vec<Fixup> = Vec::new();
-        for l in &lines_parsed {
+        for (line_idx, l) in lines_parsed.iter().enumerate() {
             match l {
                 Line::Org(v) => {
                     pc = *v;
@@ -145,18 +154,48 @@ impl Assembler {
                     out.extend_from_slice(bytes);
                     pc = pc.wrapping_add(bytes.len() as u16);
                 }
-                Line::DataWord { label: _, value } => {
+                Line::DataWord { label: _, expr } => {
                     ensure_capacity(&mut out, pc as usize);
-                    out.push((value & 0xFF) as u8);
-                    out.push((value >> 8) as u8);
+                    // Try to resolve the expression
+                    if let Ok(value) = resolve_value(expr, &sym) {
+                        out.push((value & 0xFF) as u8);
+                        out.push((value >> 8) as u8);
+                    } else if let Ok(value) = eval_multi_symbol_expr(expr, &sym) {
+                        out.push((value & 0xFF) as u8);
+                        out.push((value >> 8) as u8);
+                    } else if is_symbol(expr.trim()) {
+                        // Forward reference - add fixup
+                        let offset = out.len();
+                        out.push(0);
+                        out.push(0);
+                        fixups.push(Fixup {
+                            offset,
+                            symbol: expr.trim().to_string(),
+                            mode: AddrMode::Abs,
+                            instr_addr: pc,
+                            addend: 0,
+                            mul: 1,
+                            kind: FixupKind::Plain,
+                        });
+                    } else {
+                        bail!("Cannot resolve .word expression: {}", expr);
+                    }
                     pc = pc.wrapping_add(2);
                 }
-                Line::Block { label: _, size } => {
-                    ensure_capacity(&mut out, (pc + *size as u16) as usize);
-                    for _ in 0..*size {
+                Line::Block { label: _, expr } => {
+                    // Evaluate the expression to get the size
+                    let size = if let Ok(val) = expr.parse::<usize>() {
+                        val
+                    } else if let Ok(val) = eval_multi_symbol_expr(expr, &sym) {
+                        val as usize
+                    } else {
+                        bail!("Cannot resolve .res expression: {}", expr);
+                    };
+                    ensure_capacity(&mut out, (pc + size as u16) as usize);
+                    for _ in 0..size {
                         out.push(0);
                     }
-                    pc = pc.wrapping_add(*size as u16);
+                    pc = pc.wrapping_add(size as u16);
                 }
                 Line::Instr {
                     label: _,
@@ -164,9 +203,6 @@ impl Assembler {
                     operand,
                 } => {
                     let mode = infer_mode(mnem, operand.as_deref(), &sym);
-                    if mnem.to_ascii_uppercase() == "STY" && matches!(mode, AddrMode::AbsX) {
-                        eprintln!("DEBUG STY AbsX operand {:?}", operand);
-                    }
                     let out_offset = out.len(); // where opcode will be placed
                     if let Some(op) = lookup(mnem, mode) {
                         ensure_capacity(&mut out, pc as usize);
@@ -189,7 +225,7 @@ impl Assembler {
                         }
                         pc = pc.wrapping_add(size_for(mode) as u16);
                     } else {
-                        bail!("Opcode not found for {} {:?}", mnem, mode);
+                        bail!("Opcode not found for {} {:?} at preprocessed line {}", mnem, mode, line_idx + 1);
                     }
                 }
                 _ => {}
@@ -690,6 +726,10 @@ fn build_operand_bytes(
             } else if let Ok(v) = resolve_value(cleaned, sym) {
                 out[opcode_offset + 1] = (v & 0xFF) as u8;
                 out[opcode_offset + 2] = (v >> 8) as u8;
+            } else if let Ok(v) = eval_multi_symbol_expr(cleaned, sym) {
+                // Try evaluating multi-symbol expressions like "FOUTBL+2+ADDPRC"
+                out[opcode_offset + 1] = (v & 0xFF) as u8;
+                out[opcode_offset + 2] = (v >> 8) as u8;
             } else if is_symbol(cleaned) {
                 fixups.push(Fixup {
                     offset: opcode_offset + 1,
@@ -985,4 +1025,194 @@ fn resolve_value(token: &str, sym: &HashMap<String, u16>) -> Result<u16> {
         return Ok(*v);
     }
     bail!("Unknown symbol '{}'", token)
+}
+
+/// Evaluate complex multi-symbol expressions like "FOUTBL+2+ADDPRC"
+/// Returns the computed value if all symbols are resolved
+fn eval_multi_symbol_expr(expr: &str, sym: &HashMap<String, u16>) -> Result<u16> {
+    use std::collections::VecDeque;
+    
+    let expr = expr.trim();
+    
+    // First pass: substitute all symbols with their numeric values
+    let mut processed = String::new();
+    let mut current_symbol = String::new();
+    let mut in_hex = false;
+    
+    for ch in expr.chars() {
+        if ch == '$' {
+            if !current_symbol.is_empty() {
+                // Flush any pending symbol
+                if let Some(&val) = sym.get(&current_symbol) {
+                    processed.push_str(&val.to_string());
+                } else {
+                    bail!("Unknown symbol '{}' in expression '{}'", current_symbol, expr);
+                }
+                current_symbol.clear();
+            }
+            processed.push(ch);
+            in_hex = true;
+        } else if ch.is_alphanumeric() || ch == '_' || ch == '.' {
+            if in_hex {
+                processed.push(ch);
+            } else {
+                current_symbol.push(ch);
+            }
+        } else {
+            in_hex = false;
+            if !current_symbol.is_empty() {
+                // Check if it's a symbol or a number
+                if let Ok(num) = current_symbol.parse::<i64>() {
+                    processed.push_str(&num.to_string());
+                } else if let Some(&val) = sym.get(&current_symbol) {
+                    processed.push_str(&val.to_string());
+                } else {
+                    bail!("Unknown symbol '{}' in expression '{}'", current_symbol, expr);
+                }
+                current_symbol.clear();
+            }
+            processed.push(ch);
+        }
+    }
+    
+    // Flush any remaining symbol
+    if !current_symbol.is_empty() {
+        if let Ok(num) = current_symbol.parse::<i64>() {
+            processed.push_str(&num.to_string());
+        } else if let Some(&val) = sym.get(&current_symbol) {
+            processed.push_str(&val.to_string());
+        } else {
+            bail!("Unknown symbol '{}' in expression '{}'", current_symbol, expr);
+        }
+    }
+    
+    // Second pass: evaluate arithmetic expression with operator precedence
+    // Convert hex numbers to decimal
+    let processed = {
+        let mut result = String::new();
+        let mut chars = processed.chars().peekable();
+        while let Some(ch) = chars.next() {
+            if ch == '$' {
+                let mut hex = String::new();
+                while let Some(&next_ch) = chars.peek() {
+                    if next_ch.is_ascii_hexdigit() {
+                        hex.push(chars.next().unwrap());
+                    } else {
+                        break;
+                    }
+                }
+                if let Ok(val) = i64::from_str_radix(&hex, 16) {
+                    result.push_str(&val.to_string());
+                } else {
+                    result.push('$');
+                    result.push_str(&hex);
+                }
+            } else {
+                result.push(ch);
+            }
+        }
+        result
+    };
+    
+    // Simple expression evaluator: handles +, -, *, / with precedence
+    fn eval_expr(s: &str) -> Result<i64> {
+        // Remove whitespace
+        let s = s.chars().filter(|c| !c.is_whitespace()).collect::<String>();
+        
+        // Parse into tokens
+        let mut tokens = Vec::new();
+        let mut num = String::new();
+        
+        for ch in s.chars() {
+            if ch.is_ascii_digit() {
+                num.push(ch);
+            } else if ch == '+' || ch == '-' || ch == '*' || ch == '/' {
+                if !num.is_empty() {
+                    tokens.push(num.clone());
+                    num.clear();
+                }
+                tokens.push(ch.to_string());
+            } else if ch == '(' || ch == ')' {
+                if !num.is_empty() {
+                    tokens.push(num.clone());
+                    num.clear();
+                }
+                tokens.push(ch.to_string());
+            }
+        }
+        if !num.is_empty() {
+            tokens.push(num);
+        }
+        
+        // Simple recursive descent parser
+        fn parse_expr(tokens: &mut VecDeque<String>) -> Result<i64> {
+            parse_add_sub(tokens)
+        }
+        
+        fn parse_add_sub(tokens: &mut VecDeque<String>) -> Result<i64> {
+            let mut left = parse_mul_div(tokens)?;
+            while !tokens.is_empty() {
+                let op = tokens.front().map(|s| s.as_str());
+                if op == Some("+") {
+                    tokens.pop_front();
+                    let right = parse_mul_div(tokens)?;
+                    left = left.wrapping_add(right);
+                } else if op == Some("-") {
+                    tokens.pop_front();
+                    let right = parse_mul_div(tokens)?;
+                    left = left.wrapping_sub(right);
+                } else {
+                    break;
+                }
+            }
+            Ok(left)
+        }
+        
+        fn parse_mul_div(tokens: &mut VecDeque<String>) -> Result<i64> {
+            let mut left = parse_primary(tokens)?;
+            while !tokens.is_empty() {
+                let op = tokens.front().map(|s| s.as_str());
+                if op == Some("*") {
+                    tokens.pop_front();
+                    let right = parse_primary(tokens)?;
+                    left = left.wrapping_mul(right);
+                } else if op == Some("/") {
+                    tokens.pop_front();
+                    let right = parse_primary(tokens)?;
+                    if right == 0 {
+                        bail!("Division by zero");
+                    }
+                    left = left / right;
+                } else {
+                    break;
+                }
+            }
+            Ok(left)
+        }
+        
+        fn parse_primary(tokens: &mut VecDeque<String>) -> Result<i64> {
+            if tokens.is_empty() {
+                bail!("Unexpected end of expression");
+            }
+            
+            let token = tokens.pop_front().unwrap();
+            if token == "(" {
+                let result = parse_expr(tokens)?;
+                if tokens.is_empty() || tokens.pop_front().unwrap() != ")" {
+                    bail!("Missing closing parenthesis");
+                }
+                Ok(result)
+            } else if let Ok(num) = token.parse::<i64>() {
+                Ok(num)
+            } else {
+                bail!("Unexpected token: {}", token);
+            }
+        }
+        
+        let mut token_queue: VecDeque<String> = tokens.into_iter().collect();
+        parse_expr(&mut token_queue)
+    }
+    
+    let result = eval_expr(&processed)?;
+    Ok((result & 0xFFFF) as u16)
 }

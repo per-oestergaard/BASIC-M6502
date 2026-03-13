@@ -11,6 +11,7 @@ use std::collections::HashMap;
 pub struct PreprocessResult {
     pub lines: Vec<String>,
     pub symbols: HashMap<String, i64>,
+    pub line_map: Vec<usize>, // Maps preprocessed line index to original source line number
 }
 
 pub fn run(src: &str) -> PreprocessResult {
@@ -26,10 +27,12 @@ pub fn run(src: &str) -> PreprocessResult {
     let oct_re = Regex::new(r"\^O([0-7]+)").unwrap();
     let if_re = Regex::new(r"^(IFE|IFN|IFNDEF)\s+([^,]+),<(.*)$").unwrap();
     let if_block_re = Regex::new(r"^(IFE|IFN|IFNDEF)\s+([^,]+),<\s*$").unwrap();
-    let adr_re = Regex::new(r"^([A-Za-z_.$][\w.$]*:)?\s*ADR\(([^)]+)\)\s*(;.*)?$").unwrap();
-    let dci_re = Regex::new(r#"^([A-Za-z_.$][\w.$]*:)?\s*DCI"([^"]+)"\s*(;.*)?$"#).unwrap();
-    let dt_re = Regex::new(r#"^([A-Za-z_.$][\w.$]*:)?\s*DT"([^"]+)"\s*(;.*)?$"#).unwrap();
-    let block_re = Regex::new(r"^([A-Za-z_.$][\w.$]*:)?\s*BLOCK\s+(\d+)\b").unwrap();
+    let adr_re = Regex::new(r"^\s*([A-Za-z_.$][\w.$]*:)?\s*ADR\s*\(([^)]+)\)\s*>*\s*(;.*)?$").unwrap();
+    let dci_re = Regex::new(r#"^\s*([A-Za-z_.$][\w.$]*:)?\s*DCI"([^"]+)"\s*>*\s*(;.*)?$"#).unwrap();
+    let dce_re = Regex::new(r#"^\s*([A-Za-z_.$][\w.$]*:)?\s*DCE"([^"]+)"\s*>*\s*(;.*)?$"#).unwrap();
+    let dc_re = Regex::new(r#"^\s*([A-Za-z_.$][\w.$]*:)?\s*DC"([^"]+)"\s*>*\s*(;.*)?$"#).unwrap();
+    let dt_re = Regex::new(r#"^\s*([A-Za-z_.$][\w.$]*:)?\s*DT"([^"]+)"\s*>*\s*(;.*)?$"#).unwrap();
+    let block_re = Regex::new(r"^\s*([A-Za-z_.$][\w.$]*:)?\s*BLOCK\s+([A-Za-z_.$][\w.$]*|\d+)\s*>*\b").unwrap();
     let org_re = Regex::new(r"^\s*ORG\s+(.+?)\s*(;.*)?$").unwrap();
     let pseudo_imm_re = Regex::new(r"^\s*([A-Z]{2,4})I\s+(.+)$").unwrap();
     let angle_expr_re = Regex::new(r"<<[^>]+>").unwrap();
@@ -52,11 +55,12 @@ pub fn run(src: &str) -> PreprocessResult {
     let mut cond_stack: Vec<bool> = Vec::new();
     let code_start_re = Regex::new(r"^IFN\s+REALIO-3").unwrap();
     let mut code_started = false;
-    let mut line_no = 0usize;
     let mut long_jmp_counter: usize = 0;
     let exp_re = Regex::new(r"^([A-Za-z_.$][\w.$]*:)?\s*EXP\s+(.+)$").unwrap();
+    
     while i < lines.len() {
         let raw = lines[i];
+        let mut line_no = i;
         line_no += 1;
         let mut line = raw.replace('\t', " ");
         line = strip_comment(&line);
@@ -68,6 +72,17 @@ pub fn run(src: &str) -> PreprocessResult {
             if code_start_re.is_match(line.trim_start()) || line_no >= 731 {
                 code_started = true;
             } else {
+                // Even before code starts, process equates for symbol resolution
+                if let Some(cap) = equ_re.captures(line.trim()) {
+                    let name = cap.get(1).unwrap().as_str().trim();
+                    let expr = cap.get(2).unwrap().as_str().trim();
+                    if let Some(val) = eval_expr(expr, &symbols) {
+                        symbols.insert(name.to_string(), val);
+                    }
+                    // Output the equate so it's available during assembly
+                    let normalized = line.replace("==", "=");
+                    out.push(normalized);
+                }
                 i += 1;
                 continue;
             }
@@ -319,6 +334,47 @@ pub fn run(src: &str) -> PreprocessResult {
                             }
                         } else {
                             inner_line = normalize_numeric(&inner_line, &oct_re);
+                            
+                            // Apply DCI expansion
+                            if let Some(cap2) = dci_re.captures(&inner_line) {
+                                let label = cap2.get(1).map(|m| m.as_str()).unwrap_or("");
+                                let text = cap2.get(2).unwrap().as_str();
+                                let mut bytes: Vec<String> = text
+                                    .chars()
+                                    .map(|ch| format!("${:02X}", (ch as u8) & 0x7F))
+                                    .collect();
+                                if !bytes.is_empty() {
+                                    let last_idx = bytes.len() - 1;
+                                    if let Some(last_byte) = bytes.get_mut(last_idx) {
+                                        if let Ok(val) = u8::from_str_radix(&last_byte[1..], 16) {
+                                            *last_byte = format!("${:02X}", val | 0x80);
+                                        }
+                                    }
+                                }
+                                let data = format!(".byte {}", bytes.join(", "));
+                                inner_line = if label.is_empty() {
+                                    data
+                                } else {
+                                    format!("{} {}", label, data)
+                                };
+                            // Apply ADR expansion
+                            } else if let Some(cap2) = adr_re.captures(&inner_line) {
+                                let label = cap2.get(1).map(|m| m.as_str()).unwrap_or("");
+                                let sym = cap2.get(2).unwrap().as_str();
+                                inner_line = format!("{} .word {}", label, sym).trim().to_string();
+                            // Apply "LABEL: NUMBER" transformation
+                            } else if let Some(colon_pos) = inner_line.find(':') {
+                                let after_colon = inner_line[colon_pos + 1..].trim();
+                                if !after_colon.is_empty()
+                                    && (after_colon.chars().all(|c| c.is_ascii_digit())
+                                        || (after_colon.starts_with('$')
+                                            && after_colon.len() > 1
+                                            && after_colon[1..].chars().all(|c| c.is_ascii_hexdigit())))
+                                {
+                                    let label_part = &inner_line[..=colon_pos];
+                                    inner_line = format!("{} .byte {}", label_part, after_colon);
+                                }
+                            }
                             out.push(inner_line);
                         }
                     }
@@ -344,13 +400,41 @@ pub fn run(src: &str) -> PreprocessResult {
             continue;
         }
         if line.trim() == ">" && !cond_stack.is_empty() {
+            if std::env::var("DEBUG_PREPROC").is_ok() && i >= 6690 && i <= 6710 {
+                eprintln!("Line {}: Found single > (cond_stack len={})", i+1, cond_stack.len());
+            }
             cond_stack.pop();
             i += 1;
             continue;
         }
-        if cond_stack.iter().any(|k| !*k) {
+        // Handle >> to close two levels - CHECK THIS BEFORE SKIPPING LINES
+        if line.trim().ends_with(">>") && cond_stack.len() >= 2 {
+            // Process the line without the >>
+            let line_without_close = line.trim_end_matches('>').trim();
+            if std::env::var("DEBUG_PREPROC").is_ok() {
+                eprintln!("Line {}: Found >> (cond_stack len={}, stack={:?}): {}", i+1, cond_stack.len(), cond_stack, line.trim());
+            }
+            if !line_without_close.is_empty() && cond_stack.iter().all(|k| *k) {
+                out.push(line_without_close.to_string());
+            }
+            cond_stack.pop();
+            cond_stack.pop();
+            if std::env::var("DEBUG_PREPROC").is_ok() {
+                eprintln!("  After popping twice, cond_stack len={}", cond_stack.len());
+            }
             i += 1;
             continue;
+        }
+        // Check this AFTER handling > and >> closures
+        if cond_stack.iter().any(|k| !*k) {
+            if std::env::var("DEBUG_PREPROC").is_ok() && i >= 6690 && i <= 6710 {
+                eprintln!("Line {}: Skipping due to false in cond_stack (len={}, stack={:?}): {}", i+1, cond_stack.len(), cond_stack, line.trim());
+            }
+            i += 1;
+            continue;
+        }
+        if std::env::var("DEBUG_PREPROC").is_ok() && i >= 6690 && i <= 6710 {
+            eprintln!("Line {}: Processing (cond_stack len={}, stack={:?}): {}", i+1, cond_stack.len(), cond_stack, line.trim());
         }
         if let Some(cap) = equ_re.captures(&line) {
             let name = &cap[1];
@@ -382,6 +466,38 @@ pub fn run(src: &str) -> PreprocessResult {
                 }
                 bytes.push(format!("${:02X}", b));
             }
+            let data = format!(".byte {}", bytes.join(", "));
+            if label.is_empty() {
+                out.push(data);
+            } else {
+                out.push(format!("{} {}", label, data));
+            }
+            i += 1;
+            continue;
+        }
+        if let Some(cap) = dce_re.captures(&line) {
+            let label = cap.get(1).map(|m| m.as_str()).unwrap_or("");
+            let word = cap.get(2).unwrap().as_str();
+            let bytes: Vec<String> = word
+                .chars()
+                .map(|ch| format!("${:02X}", ch as u8))
+                .collect();
+            let data = format!(".byte {}", bytes.join(", "));
+            if label.is_empty() {
+                out.push(data);
+            } else {
+                out.push(format!("{} {}", label, data));
+            }
+            i += 1;
+            continue;
+        }
+        if let Some(cap) = dc_re.captures(&line) {
+            let label = cap.get(1).map(|m| m.as_str()).unwrap_or("");
+            let word = cap.get(2).unwrap().as_str();
+            let bytes: Vec<String> = word
+                .chars()
+                .map(|ch| format!("${:02X}", ch as u8))
+                .collect();
             let data = format!(".byte {}", bytes.join(", "));
             if label.is_empty() {
                 out.push(data);
@@ -507,10 +623,19 @@ pub fn run(src: &str) -> PreprocessResult {
         if symbol_only_re.is_match(line.trim()) {
             line.push(':');
         }
+        // Normalize octal numbers early so LABEL: ^Onnn becomes LABEL: $hex
+        line = normalize_numeric(&line, &oct_re);
         // Handle "LABEL: NUMBER" -> "LABEL: .byte NUMBER"
         {
+            let mut applied_transform = false;
             if let Some(colon_pos) = line.find(':') {
-                let after_colon = line[colon_pos + 1..].trim();
+                let after_colon_full = line[colon_pos + 1..].trim();
+                // Split off comment if present
+                let after_colon = if let Some(sc_pos) = after_colon_full.find(';') {
+                    after_colon_full[..sc_pos].trim()
+                } else {
+                    after_colon_full
+                };
                 if !after_colon.is_empty()
                     && (after_colon.chars().all(|c| c.is_ascii_digit())
                         || (after_colon.starts_with('$')
@@ -518,7 +643,77 @@ pub fn run(src: &str) -> PreprocessResult {
                             && after_colon[1..].chars().all(|c| c.is_ascii_hexdigit())))
                 {
                     let label_part = &line[..=colon_pos];
-                    line = format!("{} .byte {}", label_part, after_colon);
+                    let comment_part = if after_colon_full.contains(';') {
+                        let sc_pos = after_colon_full.find(';').unwrap();
+                        &after_colon_full[sc_pos..]
+                    } else {
+                        ""
+                    };
+                    line = format!("{} .byte {} {}", label_part, after_colon, comment_part).trim().to_string();
+                    applied_transform = true;
+                }
+            }
+            // Handle "LABEL: SYMBOL" where SYMBOL is just an identifier -> convert to equate "LABEL = SYMBOL"
+            // Only if we didn't already apply the NUMBER transform
+            if !applied_transform {
+                if let Some(colon_pos) = line.find(':') {
+                    let after_colon_with_comment = line[colon_pos + 1..].trim();
+                    // Split off comment if present
+                    let after_colon = if let Some(comment_pos) = after_colon_with_comment.find(';') {
+                        after_colon_with_comment[..comment_pos].trim()
+                    } else {
+                        after_colon_with_comment
+                    };
+                    // Check if it's a single symbol (identifier-like)
+                    let looks_like_symbol = !after_colon.is_empty()
+                        && !after_colon.contains(' ')
+                        && !after_colon.contains(',')
+                        && (after_colon.chars().next().unwrap().is_ascii_alphabetic() || after_colon.starts_with('_'))
+                        && after_colon.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '.' || c == '$')
+                        && !after_colon.starts_with('$'); // Exclude hex numbers
+                    
+                    if looks_like_symbol {
+                        let label_part = line[..colon_pos].trim();
+                        let comment = if after_colon_with_comment.contains(';') {
+                            let comment_pos = after_colon_with_comment.find(';').unwrap();
+                            &after_colon_with_comment[comment_pos..]
+                        } else {
+                            ""
+                        };
+                        line = format!("{} = {} {}", label_part, after_colon, comment);
+                    }
+                }
+            }
+        }
+        // Handle character literal expressions like "T" or "("+128
+        {
+            let t = line.trim();
+            // Match patterns like "X" or "X"+number or "X"-number
+            if !t.is_empty() && t.starts_with('"') {
+                // Try to extract character literal expression
+                if let Some(end_quote) = t[1..].find('"') {
+                    let char_part = &t[1..=end_quote];
+                    let rest = t[end_quote + 2..].trim();
+                    if char_part.len() == 1 {
+                        let ch = char_part.chars().next().unwrap();
+                        let mut value = ch as u8;
+                        
+                        // Check for arithmetic operation
+                        if rest.starts_with('+') || rest.starts_with('-') {
+                            let op = rest.chars().next().unwrap();
+                            let num_part = rest[1..].trim();
+                            if let Ok(offset) = num_part.parse::<i32>() {
+                                if op == '+' {
+                                    value = value.wrapping_add(offset as u8);
+                                } else {
+                                    value = value.wrapping_sub(offset as u8);
+                                }
+                                line = format!(".byte ${:02X}", value);
+                            }
+                        } else if rest.is_empty() {
+                            line = format!(".byte ${:02X}", value);
+                        }
+                    }
                 }
             }
         }
@@ -841,9 +1036,13 @@ pub fn run(src: &str) -> PreprocessResult {
             symbols.insert((*n).to_string(), *v);
         }
     }
+    // Create simple 1:1 line mapping for now (can be refined later)
+    let line_map: Vec<usize> = (1..=out.len()).collect();
+    
     PreprocessResult {
         lines: out,
         symbols,
+        line_map,
     }
 }
 

@@ -1,5 +1,8 @@
 {
   "chat.tools.terminal.autoApprove": {
-    "cargo run": true
+    "cargo run": true,
+    "cargo build": true,
+    "timeout": true,
+    "./target/debug/dump_all": true
   }
 }

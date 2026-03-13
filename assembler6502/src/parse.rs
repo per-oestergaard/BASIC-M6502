@@ -11,14 +11,14 @@ pub enum Line {
     Label(String),
     Instr { label:Option<String>, mnem:String, operand:Option<String>},
     DataBytes { label:Option<String>, bytes:Vec<u8>},
-    DataWord { label:Option<String>, value:u16},
-    Block { label:Option<String>, size:usize},
+    DataWord { label:Option<String>, expr:String}, // Changed from value:u16 to expr:String
+    Block { label:Option<String>, expr:String}, // Changed from size:usize to expr:String for symbol support
 }
 
 lazy_static!{
     // Match label with one or more trailing ':' (allow double-colon) without using a word boundary that broke cases like 'LABEL: MNEM'.
     static ref RE_LABEL:Regex=Regex::new(r"^(?P<label>[A-Za-z_.$][\w.$]*):+").unwrap();
-    static ref RE_EQU:Regex=Regex::new(r"^(?P<name>[A-Za-z_.$][\w.$]*)\s*=\s*(?P<expr>.+)").unwrap();
+    static ref RE_EQU:Regex=Regex::new(r"^(?P<name>[A-Za-z_.$][\w.$]*)\s*==?\s*(?P<expr>.+)").unwrap();
     static ref RE_ORG_DOT:Regex=Regex::new(r"^\.org\s+\$?([0-9A-Fa-f]+)").unwrap();
     static ref RE_ORG_PLAIN:Regex=Regex::new(r"^ORG\s+([0-9]+|\$[0-9A-Fa-f]+)").unwrap();
 }
@@ -56,11 +56,11 @@ pub fn lex_line(raw:&str)->Line{
     }
     if rest.to_ascii_lowercase().starts_with(".word "){
         let vtok=rest[6..].trim();
-        if let Some(val)=parse_word_token(vtok){ return Line::DataWord{ label, value:val }; }
+        return Line::DataWord{ label, expr: vtok.to_string() };
     }
     if rest.to_ascii_lowercase().starts_with(".res "){
         let size_tok=rest[5..].trim();
-        if let Ok(sz)=size_tok.parse(){ return Line::Block{ label, size:sz }; }
+        return Line::Block{ label, expr: size_tok.to_string() };
     }
     // crude split
     let mut parts=rest.split_whitespace();
@@ -87,6 +87,7 @@ fn parse_byte_token(s:&str)->Option<u8>{
     else if st.chars().all(|c| c.is_ascii_digit()){ st.parse().ok() }
     else { None }
 }
+#[allow(dead_code)]
 fn parse_word_token(s:&str)->Option<u16>{
     let st=s.trim();
     if let Some(hex)=st.strip_prefix('$'){ u16::from_str_radix(hex,16).ok() }
