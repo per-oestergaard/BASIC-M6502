@@ -11,7 +11,6 @@ use std::collections::HashMap;
 pub struct PreprocessResult {
     pub lines: Vec<String>,
     pub symbols: HashMap<String, i64>,
-    pub line_map: Vec<usize>, // Maps preprocessed line index to original source line number
 }
 
 pub fn run(src: &str) -> PreprocessResult {
@@ -27,12 +26,10 @@ pub fn run(src: &str) -> PreprocessResult {
     let oct_re = Regex::new(r"\^O([0-7]+)").unwrap();
     let if_re = Regex::new(r"^(IFE|IFN|IFNDEF)\s+([^,]+),<(.*)$").unwrap();
     let if_block_re = Regex::new(r"^(IFE|IFN|IFNDEF)\s+([^,]+),<\s*$").unwrap();
-    let adr_re = Regex::new(r"^\s*([A-Za-z_.$][\w.$]*:)?\s*ADR\s*\(([^)]+)\)\s*>*\s*(;.*)?$").unwrap();
-    let dci_re = Regex::new(r#"^\s*([A-Za-z_.$][\w.$]*:)?\s*DCI"([^"]+)"\s*>*\s*(;.*)?$"#).unwrap();
-    let dce_re = Regex::new(r#"^\s*([A-Za-z_.$][\w.$]*:)?\s*DCE"([^"]+)"\s*>*\s*(;.*)?$"#).unwrap();
-    let dc_re = Regex::new(r#"^\s*([A-Za-z_.$][\w.$]*:)?\s*DC"([^"]+)"\s*>*\s*(;.*)?$"#).unwrap();
-    let dt_re = Regex::new(r#"^\s*([A-Za-z_.$][\w.$]*:)?\s*DT"([^"]+)"\s*>*\s*(;.*)?$"#).unwrap();
-    let block_re = Regex::new(r"^\s*([A-Za-z_.$][\w.$]*:)?\s*BLOCK\s+([A-Za-z_.$][\w.$]*|\d+)\s*>*\b").unwrap();
+    let adr_re = Regex::new(r"^([A-Za-z_.$][\w.$]*:)?\s*ADR\(([^)]+)\)\s*>?\s*(;.*)?$").unwrap();
+    let dci_re = Regex::new(r#"^([A-Za-z_.$][\w.$]*:)?\s*DCI"([^"]+)"\s*>?\s*(;.*)?$"#).unwrap();
+    let dt_re = Regex::new(r#"^([A-Za-z_.$][\w.$]*:)?\s*DT"([^"]+)"\s*>?\s*(;.*)?$"#).unwrap();
+    let block_re = Regex::new(r"^([A-Za-z_.$][\w.$]*:)?\s*BLOCK\s+([^\s;]+)").unwrap();
     let org_re = Regex::new(r"^\s*ORG\s+(.+?)\s*(;.*)?$").unwrap();
     let pseudo_imm_re = Regex::new(r"^\s*([A-Z]{2,4})I\s+(.+)$").unwrap();
     let angle_expr_re = Regex::new(r"<<[^>]+>").unwrap();
@@ -48,6 +45,9 @@ pub fn run(src: &str) -> PreprocessResult {
     let label_hex_bytes_re =
         Regex::new(r"^([A-Za-z_.$][\w.$]*:)?\s*(\$[0-9A-Fa-f]{1,2})(\s+\$[0-9A-Fa-f]{1,2})*$")
             .unwrap();
+    let label_single_num_re = Regex::new(r"^([A-Za-z_.$][\w.$]*:)\s*(\d+)$").unwrap();
+    let label_single_sym_re =
+        Regex::new(r"^([A-Za-z_.$][\w.$]*:)\s*([A-Za-z_.$][\w.$]*)$").unwrap();
     let mut out = Vec::new();
     let mut symbols: HashMap<String, i64> = HashMap::new();
     let mut i = 0;
@@ -55,15 +55,18 @@ pub fn run(src: &str) -> PreprocessResult {
     let mut cond_stack: Vec<bool> = Vec::new();
     let code_start_re = Regex::new(r"^IFN\s+REALIO-3").unwrap();
     let mut code_started = false;
+    let mut line_no = 0usize;
     let mut long_jmp_counter: usize = 0;
     let exp_re = Regex::new(r"^([A-Za-z_.$][\w.$]*:)?\s*EXP\s+(.+)$").unwrap();
-    
     while i < lines.len() {
         let raw = lines[i];
-        let mut line_no = i;
         line_no += 1;
         let mut line = raw.replace('\t', " ");
         line = strip_comment(&line);
+        // Strip trailing > (PDP-10 block terminator when not standalone line)
+        if line.ends_with('>') && line.trim() != ">" {
+            line = line[..line.len() - 1].trim_end().to_string();
+        }
         if line.trim().is_empty() {
             i += 1;
             continue;
@@ -72,17 +75,6 @@ pub fn run(src: &str) -> PreprocessResult {
             if code_start_re.is_match(line.trim_start()) || line_no >= 731 {
                 code_started = true;
             } else {
-                // Even before code starts, process equates for symbol resolution
-                if let Some(cap) = equ_re.captures(line.trim()) {
-                    let name = cap.get(1).unwrap().as_str().trim();
-                    let expr = cap.get(2).unwrap().as_str().trim();
-                    if let Some(val) = eval_expr(expr, &symbols) {
-                        symbols.insert(name.to_string(), val);
-                    }
-                    // Output the equate so it's available during assembly
-                    let normalized = line.replace("==", "=");
-                    out.push(normalized);
-                }
                 i += 1;
                 continue;
             }
@@ -91,10 +83,6 @@ pub fn run(src: &str) -> PreprocessResult {
             if line[..pos].chars().all(|c| c != ' ') {
                 line = line.replacen("::", ":", 1);
             }
-        }
-        // Remove label scope markers like :! (ZSTORD:! -> ZSTORD:)
-        if line.contains(":!") {
-            line = line.replace(":!", ":");
         }
         if directive_re.is_match(&line) {
             i += 1;
@@ -109,73 +97,6 @@ pub fn run(src: &str) -> PreprocessResult {
                 }
                 i += 1;
             }
-            i += 1;
-            continue;
-        }
-        // Handle REPEAT n,< ... > blocks (both single-line and multi-line)
-        // Can be "REPEAT ..." or "LABEL: REPEAT ..."
-        let repeat_check = if let Some(colon_pos) = line.find(':') {
-            line[colon_pos + 1..].trim_start()
-        } else {
-            line.trim_start()
-        };
-        if repeat_check.starts_with("REPEAT") {
-            let parts: Vec<&str> = repeat_check.split_whitespace().collect();
-            if parts.len() >= 2 {
-                let count_str = parts[1].trim_end_matches(',');
-                if let Ok(count) = count_str.parse::<usize>() {
-                    // Check if there's a label
-                    let label = if line.trim_start() != repeat_check {
-                        line.split(':').next().map(|s| format!("{}:", s))
-                    } else {
-                        None
-                    };
-                    // Check if this is a single-line REPEAT (contains closing >)
-                    if repeat_check.contains('>') {
-                        // Extract body between < and >
-                        if let Some(start) = repeat_check.find('<') {
-                            if let Some(end) = repeat_check.rfind('>') {
-                                let body = repeat_check[start + 1..end].trim();
-                                // Output label on first iteration
-                                for (idx, _) in (0..count).enumerate() {
-                                    if idx == 0 && label.is_some() {
-                                        out.push(format!("{} {}", label.as_ref().unwrap(), body));
-                                    } else {
-                                        out.push(format!(" {}", body));
-                                    }
-                                }
-                                i += 1;
-                                continue;
-                            }
-                        }
-                    } else {
-                        // Multi-line REPEAT: collect body until closing >
-                        let mut body_lines = Vec::new();
-                        i += 1;
-                        while i < lines.len() {
-                            let body_line = lines[i];
-                            if body_line.trim().ends_with(">>") || body_line.trim() == ">" {
-                                break;
-                            }
-                            body_lines.push(body_line);
-                            i += 1;
-                        }
-                        // Output body `count` times (label on first iteration only)
-                        for (idx, _) in (0..count).enumerate() {
-                            for (bl_idx, bl) in body_lines.iter().enumerate() {
-                                if idx == 0 && bl_idx == 0 && label.is_some() {
-                                    out.push(format!("{} {}", label.as_ref().unwrap(), bl));
-                                } else {
-                                    out.push(bl.to_string());
-                                }
-                            }
-                        }
-                        i += 1;
-                        continue;
-                    }
-                }
-            }
-            // If we can't parse it, skip it
             i += 1;
             continue;
         }
@@ -198,11 +119,6 @@ pub fn run(src: &str) -> PreprocessResult {
             i += 1;
             continue;
         }
-        // Skip % separator lines
-        if line.trim() == "%" {
-            i += 1;
-            continue;
-        }
         let trimmed_dash = line.trim();
         if !trimmed_dash.is_empty() && trimmed_dash.chars().all(|c| c == '-' || c == ' ') {
             i += 1;
@@ -218,56 +134,11 @@ pub fn run(src: &str) -> PreprocessResult {
             i += 1;
             continue;
         }
-        // Skip prose lines with := (pseudo-code assignment)
-        if line.contains(":=") {
-            i += 1;
-            continue;
-        }
-        // Skip prose lines with math operators like ^ (exponentiation) or "=" with prose context
-        if line.contains(" ^ ")
-            || (line.contains(" * ") && line.contains(" = ") && line.split_whitespace().count() > 4)
-        {
-            i += 1;
-            continue;
-        }
-        // Skip prose blocks (uppercase text starting at column 0, no code-like structure)
-        // These are documentation comments in all-caps at the start of a line
-        if !raw.starts_with(char::is_whitespace) && !line.is_empty() {
-            let first_word = line.split_whitespace().next().unwrap_or("");
-            // Check if this looks like prose commentary:
-            // - First word is all uppercase letters (THE, FOR, ON, TO, etc.)
-            // - Not a label (doesn't end with :)
-            // - Not a directive or opcode
-            // - Has multiple words
-            if first_word.len() >= 2
-                && first_word.chars().all(|c| c.is_ascii_uppercase())
-                && !first_word.ends_with(':')
-                && !OPCODES.contains(&first_word)
-                && line.split_whitespace().count() > 2
-                && !first_word.starts_with("ORG")
-                && !first_word.starts_with("ADR")
-                && !first_word.starts_with("DCI")
-                && !first_word.starts_with("BLOCK")
-                && !matches!(first_word, "IFE" | "IFN" | "IFNDEF")
-            {
-                i += 1;
-                continue;
-            }
-        }
         // Skip plain text prose lines (no colon/equals and first word not opcode or known directive)
-        // Also skip prose lines ending with colon (like "TEXT:" as punctuation, not label)
         let first_word = line.split_whitespace().next().unwrap_or("");
-        let first_word_alpha: String = first_word
-            .chars()
-            .filter(|c| c.is_ascii_alphabetic())
-            .collect();
-        let first_word_upper = first_word_alpha.to_ascii_uppercase();
-        if !first_word_alpha.is_empty() && !OPCODES.contains(&first_word_upper.as_str()) {
-            // Check if this looks like a prose line ending with punctuation colon
-            let has_label_colon = first_word.ends_with(':');
-            let has_prose_colon = !has_label_colon && line.trim_end().ends_with(':');
+        if first_word.chars().all(|c| c.is_ascii_alphabetic()) && !OPCODES.contains(&first_word) {
             if !line.contains('=')
-                && (!line.contains(':') || has_prose_colon)
+                && !line.contains(':')
                 && !first_word.starts_with("ORG")
                 && !first_word.starts_with("ADR")
                 && !first_word.starts_with("DCI")
@@ -334,47 +205,6 @@ pub fn run(src: &str) -> PreprocessResult {
                             }
                         } else {
                             inner_line = normalize_numeric(&inner_line, &oct_re);
-                            
-                            // Apply DCI expansion
-                            if let Some(cap2) = dci_re.captures(&inner_line) {
-                                let label = cap2.get(1).map(|m| m.as_str()).unwrap_or("");
-                                let text = cap2.get(2).unwrap().as_str();
-                                let mut bytes: Vec<String> = text
-                                    .chars()
-                                    .map(|ch| format!("${:02X}", (ch as u8) & 0x7F))
-                                    .collect();
-                                if !bytes.is_empty() {
-                                    let last_idx = bytes.len() - 1;
-                                    if let Some(last_byte) = bytes.get_mut(last_idx) {
-                                        if let Ok(val) = u8::from_str_radix(&last_byte[1..], 16) {
-                                            *last_byte = format!("${:02X}", val | 0x80);
-                                        }
-                                    }
-                                }
-                                let data = format!(".byte {}", bytes.join(", "));
-                                inner_line = if label.is_empty() {
-                                    data
-                                } else {
-                                    format!("{} {}", label, data)
-                                };
-                            // Apply ADR expansion
-                            } else if let Some(cap2) = adr_re.captures(&inner_line) {
-                                let label = cap2.get(1).map(|m| m.as_str()).unwrap_or("");
-                                let sym = cap2.get(2).unwrap().as_str();
-                                inner_line = format!("{} .word {}", label, sym).trim().to_string();
-                            // Apply "LABEL: NUMBER" transformation
-                            } else if let Some(colon_pos) = inner_line.find(':') {
-                                let after_colon = inner_line[colon_pos + 1..].trim();
-                                if !after_colon.is_empty()
-                                    && (after_colon.chars().all(|c| c.is_ascii_digit())
-                                        || (after_colon.starts_with('$')
-                                            && after_colon.len() > 1
-                                            && after_colon[1..].chars().all(|c| c.is_ascii_hexdigit())))
-                                {
-                                    let label_part = &inner_line[..=colon_pos];
-                                    inner_line = format!("{} .byte {}", label_part, after_colon);
-                                }
-                            }
                             out.push(inner_line);
                         }
                     }
@@ -400,41 +230,13 @@ pub fn run(src: &str) -> PreprocessResult {
             continue;
         }
         if line.trim() == ">" && !cond_stack.is_empty() {
-            if std::env::var("DEBUG_PREPROC").is_ok() && i >= 6690 && i <= 6710 {
-                eprintln!("Line {}: Found single > (cond_stack len={})", i+1, cond_stack.len());
-            }
             cond_stack.pop();
             i += 1;
             continue;
         }
-        // Handle >> to close two levels - CHECK THIS BEFORE SKIPPING LINES
-        if line.trim().ends_with(">>") && cond_stack.len() >= 2 {
-            // Process the line without the >>
-            let line_without_close = line.trim_end_matches('>').trim();
-            if std::env::var("DEBUG_PREPROC").is_ok() {
-                eprintln!("Line {}: Found >> (cond_stack len={}, stack={:?}): {}", i+1, cond_stack.len(), cond_stack, line.trim());
-            }
-            if !line_without_close.is_empty() && cond_stack.iter().all(|k| *k) {
-                out.push(line_without_close.to_string());
-            }
-            cond_stack.pop();
-            cond_stack.pop();
-            if std::env::var("DEBUG_PREPROC").is_ok() {
-                eprintln!("  After popping twice, cond_stack len={}", cond_stack.len());
-            }
-            i += 1;
-            continue;
-        }
-        // Check this AFTER handling > and >> closures
         if cond_stack.iter().any(|k| !*k) {
-            if std::env::var("DEBUG_PREPROC").is_ok() && i >= 6690 && i <= 6710 {
-                eprintln!("Line {}: Skipping due to false in cond_stack (len={}, stack={:?}): {}", i+1, cond_stack.len(), cond_stack, line.trim());
-            }
             i += 1;
             continue;
-        }
-        if std::env::var("DEBUG_PREPROC").is_ok() && i >= 6690 && i <= 6710 {
-            eprintln!("Line {}: Processing (cond_stack len={}, stack={:?}): {}", i+1, cond_stack.len(), cond_stack, line.trim());
         }
         if let Some(cap) = equ_re.captures(&line) {
             let name = &cap[1];
@@ -466,38 +268,6 @@ pub fn run(src: &str) -> PreprocessResult {
                 }
                 bytes.push(format!("${:02X}", b));
             }
-            let data = format!(".byte {}", bytes.join(", "));
-            if label.is_empty() {
-                out.push(data);
-            } else {
-                out.push(format!("{} {}", label, data));
-            }
-            i += 1;
-            continue;
-        }
-        if let Some(cap) = dce_re.captures(&line) {
-            let label = cap.get(1).map(|m| m.as_str()).unwrap_or("");
-            let word = cap.get(2).unwrap().as_str();
-            let bytes: Vec<String> = word
-                .chars()
-                .map(|ch| format!("${:02X}", ch as u8))
-                .collect();
-            let data = format!(".byte {}", bytes.join(", "));
-            if label.is_empty() {
-                out.push(data);
-            } else {
-                out.push(format!("{} {}", label, data));
-            }
-            i += 1;
-            continue;
-        }
-        if let Some(cap) = dc_re.captures(&line) {
-            let label = cap.get(1).map(|m| m.as_str()).unwrap_or("");
-            let word = cap.get(2).unwrap().as_str();
-            let bytes: Vec<String> = word
-                .chars()
-                .map(|ch| format!("${:02X}", ch as u8))
-                .collect();
             let data = format!(".byte {}", bytes.join(", "));
             if label.is_empty() {
                 out.push(data);
@@ -623,100 +393,6 @@ pub fn run(src: &str) -> PreprocessResult {
         if symbol_only_re.is_match(line.trim()) {
             line.push(':');
         }
-        // Normalize octal numbers early so LABEL: ^Onnn becomes LABEL: $hex
-        line = normalize_numeric(&line, &oct_re);
-        // Handle "LABEL: NUMBER" -> "LABEL: .byte NUMBER"
-        {
-            let mut applied_transform = false;
-            if let Some(colon_pos) = line.find(':') {
-                let after_colon_full = line[colon_pos + 1..].trim();
-                // Split off comment if present
-                let after_colon = if let Some(sc_pos) = after_colon_full.find(';') {
-                    after_colon_full[..sc_pos].trim()
-                } else {
-                    after_colon_full
-                };
-                if !after_colon.is_empty()
-                    && (after_colon.chars().all(|c| c.is_ascii_digit())
-                        || (after_colon.starts_with('$')
-                            && after_colon.len() > 1
-                            && after_colon[1..].chars().all(|c| c.is_ascii_hexdigit())))
-                {
-                    let label_part = &line[..=colon_pos];
-                    let comment_part = if after_colon_full.contains(';') {
-                        let sc_pos = after_colon_full.find(';').unwrap();
-                        &after_colon_full[sc_pos..]
-                    } else {
-                        ""
-                    };
-                    line = format!("{} .byte {} {}", label_part, after_colon, comment_part).trim().to_string();
-                    applied_transform = true;
-                }
-            }
-            // Handle "LABEL: SYMBOL" where SYMBOL is just an identifier -> convert to equate "LABEL = SYMBOL"
-            // Only if we didn't already apply the NUMBER transform
-            if !applied_transform {
-                if let Some(colon_pos) = line.find(':') {
-                    let after_colon_with_comment = line[colon_pos + 1..].trim();
-                    // Split off comment if present
-                    let after_colon = if let Some(comment_pos) = after_colon_with_comment.find(';') {
-                        after_colon_with_comment[..comment_pos].trim()
-                    } else {
-                        after_colon_with_comment
-                    };
-                    // Check if it's a single symbol (identifier-like)
-                    let looks_like_symbol = !after_colon.is_empty()
-                        && !after_colon.contains(' ')
-                        && !after_colon.contains(',')
-                        && (after_colon.chars().next().unwrap().is_ascii_alphabetic() || after_colon.starts_with('_'))
-                        && after_colon.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '.' || c == '$')
-                        && !after_colon.starts_with('$'); // Exclude hex numbers
-                    
-                    if looks_like_symbol {
-                        let label_part = line[..colon_pos].trim();
-                        let comment = if after_colon_with_comment.contains(';') {
-                            let comment_pos = after_colon_with_comment.find(';').unwrap();
-                            &after_colon_with_comment[comment_pos..]
-                        } else {
-                            ""
-                        };
-                        line = format!("{} = {} {}", label_part, after_colon, comment);
-                    }
-                }
-            }
-        }
-        // Handle character literal expressions like "T" or "("+128
-        {
-            let t = line.trim();
-            // Match patterns like "X" or "X"+number or "X"-number
-            if !t.is_empty() && t.starts_with('"') {
-                // Try to extract character literal expression
-                if let Some(end_quote) = t[1..].find('"') {
-                    let char_part = &t[1..=end_quote];
-                    let rest = t[end_quote + 2..].trim();
-                    if char_part.len() == 1 {
-                        let ch = char_part.chars().next().unwrap();
-                        let mut value = ch as u8;
-                        
-                        // Check for arithmetic operation
-                        if rest.starts_with('+') || rest.starts_with('-') {
-                            let op = rest.chars().next().unwrap();
-                            let num_part = rest[1..].trim();
-                            if let Ok(offset) = num_part.parse::<i32>() {
-                                if op == '+' {
-                                    value = value.wrapping_add(offset as u8);
-                                } else {
-                                    value = value.wrapping_sub(offset as u8);
-                                }
-                                line = format!(".byte ${:02X}", value);
-                            }
-                        } else if rest.is_empty() {
-                            line = format!(".byte ${:02X}", value);
-                        }
-                    }
-                }
-            }
-        }
         // If line is a bare number (decimal or $hex) treat as .byte (common from stripped macros producing 0)
         {
             let t = line.trim();
@@ -769,7 +445,25 @@ pub fn run(src: &str) -> PreprocessResult {
                 }
             }
         }
-        // Simple multi-byte load/store macro expansion (subset): LDWX/LDWD/LDXY/STWD/STWX/STXY/PULWD/PSHWD/COM
+        // If line is LABEL: single-number (like NULCNT: 0), convert to .byte
+        {
+            if label_single_num_re.is_match(line.trim()) {
+                let cap = label_single_num_re.captures(line.trim()).unwrap();
+                let label = &cap[1];
+                let num = &cap[2];
+                line = format!("{} .byte {}", label, num);
+            }
+        }
+        // If line is LABEL: SYMBOL (like LINWID: LINLEN), convert to .byte
+        {
+            if label_single_sym_re.is_match(line.trim()) {
+                let cap = label_single_sym_re.captures(line.trim()).unwrap();
+                let label = &cap[1];
+                let sym = &cap[2];
+                line = format!("{} .byte {}", label, sym);
+            }
+        }
+        // Simple multi-byte load/store macro expansion (subset): LDWX/LDWD/LDXY/STWD/STWX/STXY
         // We stripped original DEFINEs, so expand calls here.
         {
             let mut label_prefix = "";
@@ -839,6 +533,20 @@ pub fn run(src: &str) -> PreprocessResult {
                     }
                     let expand = match opu.as_str() {
                         "SYNCHK" => Some(vec![format!("{} JSR SYNCHK", label_prefix)]),
+                        // Push 16-bit value (heuristic: low then high)
+                        "PSHWD" => Some(vec![
+                            format!("{} LDA {}", label_prefix, a),
+                            "PHA".to_string(),
+                            format!("LDA {}+1", a),
+                            "PHA".to_string(),
+                        ]),
+                        // Pull 16-bit value (high then low, reverse of push)
+                        "PULWD" => Some(vec![
+                            format!("{} PLA", label_prefix),
+                            format!("STA {}+1", a),
+                            "PLA".to_string(),
+                            format!("STA {}", a),
+                        ]),
                         // CLR addr: emulate by loading A with 0 then storing
                         "CLR" => Some(vec![
                             format!("{} LDA #0", label_prefix),
@@ -901,23 +609,6 @@ pub fn run(src: &str) -> PreprocessResult {
                                 format!("LDY #>{}", inner),
                             ])
                         }
-                        "PULWD" => Some(vec![
-                            format!("{} PLA", label_prefix),
-                            format!("STA {}", a),
-                            "PLA".to_string(),
-                            format!("STA {}+1", a),
-                        ]),
-                        "PSHWD" => Some(vec![
-                            format!("{} LDA {}+1", label_prefix, a),
-                            "PHA".to_string(),
-                            format!("LDA {}", a),
-                            "PHA".to_string(),
-                        ]),
-                        "COM" => Some(vec![
-                            format!("{} LDA {}", label_prefix, a),
-                            "EOR #$FF".to_string(),
-                            format!("STA {}", a),
-                        ]),
                         _ => None,
                     };
                     if let Some(lines_expanded) = expand {
@@ -969,51 +660,6 @@ pub fn run(src: &str) -> PreprocessResult {
             continue;
         }
         line = normalize_numeric(&line, &oct_re);
-        // Auto-convert ALL branch instructions to unconditional jumps via trampoline
-        // Pattern: Bxx JUMPFIX; JMP AFTERFIX; JUMPFIX: JMP TARGET; AFTERFIX:
-        // This prevents "branch out of range" errors completely
-        // Skip branches to our generated labels to avoid recursion
-        {
-            let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() >= 2 {
-                // Handle both "BEQ TARGET" and "LABEL: BEQ TARGET"
-                let (label_part, mnem_idx, target_idx) =
-                    if parts[0].ends_with(':') && parts.len() >= 3 {
-                        (parts[0], 1, 2)
-                    } else {
-                        ("", 0, 1)
-                    };
-                let mnem = parts[mnem_idx].to_ascii_uppercase();
-                let target = parts[target_idx];
-                // Check if it's a branch instruction and not to a generated label
-                if matches!(
-                    mnem.as_str(),
-                    "BEQ" | "BNE" | "BCC" | "BCS" | "BPL" | "BMI" | "BVC" | "BVS"
-                ) && !target.starts_with("__JFIX")
-                    && !target.starts_with("__AFIX")
-                    && !target.starts_with("__LJ")
-                {
-                    let jumpfix = format!("__JFIX{}", long_jmp_counter);
-                    let afterfix = format!("__AFIX{}", long_jmp_counter);
-                    long_jmp_counter += 1;
-                    // LABEL: Bxx JUMPFIX (or just Bxx JUMPFIX if no label)
-                    if !label_part.is_empty() {
-                        out.push(format!("{} {} {}", label_part, mnem, jumpfix));
-                    } else {
-                        out.push(format!(" {} {}", mnem, jumpfix));
-                    }
-                    // JMP AFTERFIX
-                    out.push(format!(" JMP {}", afterfix));
-                    // JUMPFIX: JMP TARGET
-                    out.push(format!("{}:", jumpfix));
-                    out.push(format!(" JMP {}", target));
-                    // AFTERFIX:
-                    out.push(format!("{}:", afterfix));
-                    i += 1;
-                    continue;
-                }
-            }
-        }
         out.push(line);
         i += 1;
     }
@@ -1036,13 +682,9 @@ pub fn run(src: &str) -> PreprocessResult {
             symbols.insert((*n).to_string(), *v);
         }
     }
-    // Create simple 1:1 line mapping for now (can be refined later)
-    let line_map: Vec<usize> = (1..=out.len()).collect();
-    
     PreprocessResult {
         lines: out,
         symbols,
-        line_map,
     }
 }
 

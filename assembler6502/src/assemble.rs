@@ -233,6 +233,9 @@ impl Assembler {
         }
         // Resolve fixups now that all labels collected
         for f in &fixups {
+            if std::env::var("DEBUG_FIXUP").is_ok() {
+                eprintln!("Fixup: symbol='{}', offset={}, mode={:?}", f.symbol, f.offset, f.mode);
+            }
             let target = sym
                 .get(&f.symbol)
                 .copied()
@@ -338,6 +341,14 @@ fn infer_mode(mnem: &str, operand: Option<&str>, sym: &HashMap<String, u16>) -> 
         return Imp;
     }
     let op = operand.unwrap().trim();
+    // Check for explicit "A" operand for accumulator mode
+    if op.eq_ignore_ascii_case("a") {
+        let m = mnem.to_ascii_uppercase();
+        if matches!(m.as_str(), "ASL" | "LSR" | "ROL" | "ROR") {
+            return Acc;
+        }
+        // For other instructions, "A" shouldn't be a valid operand, but fall through
+    }
     if op.starts_with('#') {
         return Imm;
     }
