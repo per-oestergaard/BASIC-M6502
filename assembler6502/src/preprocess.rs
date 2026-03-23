@@ -1,5 +1,13 @@
 use regex::Regex;
 use std::collections::HashMap;
+use tracing::trace;
+
+// Conditional state: track whether we're in the active branch
+#[derive(Debug, Clone)]
+struct Cond {
+    active: bool,    // Is this branch being assembled?
+    seen_else: bool, // Have we processed an ELSE for this IF?
+}
 
 // Preprocess original source for one target configuration (REALIO=4):
 // - Strip TITLE/SEARCH/SALL/RADIX/SUBTTL
@@ -22,24 +30,29 @@ pub fn run(src: &str) -> PreprocessResult {
         "BNE", "BEQ", "BRK", "NOP",
     ];
     let directive_re = Regex::new(r"^(?i)(TITLE|SEARCH|SALL|RADIX|SUBTTL)\b").unwrap();
-    let equ_re = Regex::new(r"^([A-Za-z_.$][\w.$]*)\s*==?\s*([^;]+)").unwrap();
+    let equ_re = Regex::new(r"^\s*([A-Za-z_.$][\w.$]*)\s*==?\s*([^;]+)").unwrap();
     let oct_re = Regex::new(r"\^O([0-7]+)").unwrap();
     let if_re = Regex::new(r"^(IFE|IFN|IFNDEF)\s+([^,]+),<(.*)$").unwrap();
     let if_block_re = Regex::new(r"^(IFE|IFN|IFNDEF)\s+([^,]+),<\s*$").unwrap();
-    let adr_re = Regex::new(r"^([A-Za-z_.$][\w.$]*:)?\s*ADR\(([^)]+)\)\s*>?\s*(;.*)?$").unwrap();
-    let dci_re = Regex::new(r#"^([A-Za-z_.$][\w.$]*:)?\s*DCI"([^"]+)"\s*>?\s*(;.*)?$"#).unwrap();
-    let dt_re = Regex::new(r#"^([A-Za-z_.$][\w.$]*:)?\s*DT"([^"]+)"\s*>?\s*(;.*)?$"#).unwrap();
-    let block_re = Regex::new(r"^([A-Za-z_.$][\w.$]*:)?\s*BLOCK\s+([^\s;]+)").unwrap();
+    let adr_re =
+        Regex::new(r"^\s*([A-Za-z_.$][\w.$]*:)?\s*ADR\s*\(([^)]+)\)\s*>?\s*(;.*)?$").unwrap();
+    let dci_re =
+        Regex::new(r#"^\s*([A-Za-z_.$][\w.$]*:)?\s*DCI\s*"([^"]+)"\s*>?\s*(;.*)?$"#).unwrap();
+    let dt_re =
+        Regex::new(r#"^\s*([A-Za-z_.$][\w.$]*:)?\s*DT\s*"([^"]+)"\s*>?\s*(;.*)?$"#).unwrap();
+    let dce_re =
+        Regex::new(r#"^\s*([A-Za-z_.$][\w.$]*:)?\s*DCE\s*"([^"]+)"\s*>?\s*(;.*)?$"#).unwrap();
+    let dc_re =
+        Regex::new(r#"^\s*([A-Za-z_.$][\w.$]*:)?\s*DC\s*"([^"]+)"\s*>?\s*(;.*)?$"#).unwrap();
+    let block_re = Regex::new(r"^\s*([A-Za-z_.$][\w.$]*:)?\s*BLOCK\s+([^\s;]+)").unwrap();
     let org_re = Regex::new(r"^\s*ORG\s+(.+?)\s*(;.*)?$").unwrap();
-    let pseudo_imm_re = Regex::new(r"^\s*([A-Z]{2,4})I\s+(.+)$").unwrap();
-    let angle_expr_re = Regex::new(r"<<[^>]+>").unwrap();
-    let div_shift_re = Regex::new(r"0/\$100>>").unwrap();
-    let angle_sym_re = Regex::new(r"<([A-Za-z_.$][\\w.$]*)>").unwrap();
+
     let define_re = Regex::new(r"^\s*DEFINE\b").unwrap();
     let printx_re = Regex::new(r"^\s*PRINTX\b").unwrap();
     let page_re = Regex::new(r"^\s*PAGE\b").unwrap();
-    let comment_block_start_re = Regex::new(r"^\s*COMMENT\s+\*\b").unwrap();
-    let comment_single_re = Regex::new(r"^\s*COMMENT\b").unwrap();
+    let repeat_re = Regex::new(r"^\s*([A-Za-z_.$][\w.$]*:)?\s*REPEAT\s+([^,]+),<(.*)$").unwrap();
+    let comment_block_start_re = Regex::new(r"^\s*COMMENT\s+(.)").unwrap();
+    let comment_single_re = Regex::new(r"^\s*COMMENT\s*$").unwrap();
     let symbol_only_re = Regex::new(r"^[A-Za-z_.$][\w.$]*$").unwrap();
     let date_line_re = Regex::new(r"^(\d{1,2})/(\d{1,2})/(\d{2}) ").unwrap();
     let label_hex_bytes_re =
@@ -52,58 +65,89 @@ pub fn run(src: &str) -> PreprocessResult {
     let mut symbols: HashMap<String, i64> = HashMap::new();
     let mut i = 0;
     let lines: Vec<&str> = src.lines().collect();
-    let mut cond_stack: Vec<bool> = Vec::new();
-    let code_start_re = Regex::new(r"^IFN\s+REALIO-3").unwrap();
-    let mut code_started = false;
-    let mut line_no = 0usize;
+    let mut cond_stack: Vec<Cond> = Vec::new();
+    let mut _line_no = 0usize;
     let mut long_jmp_counter: usize = 0;
     let exp_re = Regex::new(r"^([A-Za-z_.$][\w.$]*:)?\s*EXP\s+(.+)$").unwrap();
     while i < lines.len() {
         let raw = lines[i];
-        line_no += 1;
+        _line_no += 1;
         let mut line = raw.replace('\t', " ");
         line = strip_comment(&line);
-        // Strip trailing > (PDP-10 block terminator when not standalone line)
-        if line.ends_with('>') && line.trim() != ">" {
-            line = line[..line.len() - 1].trim_end().to_string();
+
+        // CRITICAL: Skip lines inside inactive conditionals BEFORE processing closing > characters
+        // This prevents us from incorrectly popping the conditional stack when processing
+        // content that should be skipped (like REPEAT blocks inside inactive IFN/IFE)
+        let should_skip_line = cond_stack.iter().any(|k| !k.active);
+
+        // Process closing > characters to pop conditional stack
+        // This must happen regardless of whether we're in an inactive block,
+        // because that's how we know when the inactive block ends!
+        if line.contains('>') {
+            let trimmed = line.trim_end();
+            if trimmed.ends_with('>') && trimmed != ">" {
+                // For conditional directives, only look after the comma for closing >
+                let check_str = if let Some(comma_pos) = trimmed.find(',') {
+                    &trimmed[comma_pos + 1..]
+                } else {
+                    trimmed
+                };
+
+                // Count unmatched > characters (those without a matching < in the same expression)
+                let open_count = check_str.matches('<').count();
+                let close_count = check_str.matches('>').count();
+
+                if close_count > open_count {
+                    let num_closers = close_count - open_count;
+                    // Pop stack once for each unmatched >
+                    for _ in 0..num_closers {
+                        if !cond_stack.is_empty() {
+                            cond_stack.pop();
+                        }
+                    }
+                    // Only strip closers from the line if we're NOT in an inactive block
+                    // (inactive lines will be skipped anyway, so no need to modify them)
+                    if !should_skip_line {
+                        let mut end = trimmed.len();
+                        for _ in 0..num_closers {
+                            if end > 0 && trimmed.as_bytes()[end - 1] == b'>' {
+                                end -= 1;
+                            }
+                        }
+                        // Also strip a trailing comma left by the ",>" MACRO-10 block-end convention
+                        while end > 0 && trimmed.as_bytes()[end - 1] == b',' {
+                            end -= 1;
+                        }
+                        line = trimmed[..end].trim_end().to_string();
+                    }
+                }
+            }
         }
+
         if line.trim().is_empty() {
             i += 1;
             continue;
-        }
-        if !code_started {
-            if code_start_re.is_match(line.trim_start()) || line_no >= 731 {
-                code_started = true;
-            } else {
-                i += 1;
-                continue;
-            }
         }
         if let Some(pos) = line.find("::") {
             if line[..pos].chars().all(|c| c != ' ') {
                 line = line.replacen("::", ":", 1);
             }
         }
+        // Strip ! after : in labels (MACRO-10 local label notation)
+        if let Some(pos) = line.find(":!") {
+            if line[..pos].chars().all(|c| c != ' ') {
+                line = line.replacen(":!", ":", 1);
+            }
+        }
         if directive_re.is_match(&line) {
             i += 1;
             continue;
         }
-        if define_re.is_match(&line) {
+        if let Some(cap) = comment_block_start_re.captures(&line) {
+            let delimiter = &cap[1];
             i += 1;
             while i < lines.len() {
-                let l = lines[i].trim_end();
-                if l.ends_with('>') {
-                    break;
-                }
-                i += 1;
-            }
-            i += 1;
-            continue;
-        }
-        if comment_block_start_re.is_match(&line) {
-            i += 1;
-            while i < lines.len() {
-                if lines[i].trim() == "*" {
+                if lines[i].trim() == delimiter {
                     i += 1;
                     break;
                 }
@@ -115,7 +159,8 @@ pub fn run(src: &str) -> PreprocessResult {
             i += 1;
             continue;
         }
-        if line.trim() == "*" {
+        // Skip lone delimiter lines (potential comment block terminators that slipped through)
+        if line.trim().len() == 1 && !line.trim().chars().next().unwrap().is_alphanumeric() {
             i += 1;
             continue;
         }
@@ -137,19 +182,85 @@ pub fn run(src: &str) -> PreprocessResult {
         // Skip plain text prose lines (no colon/equals and first word not opcode or known directive)
         let first_word = line.split_whitespace().next().unwrap_or("");
         if first_word.chars().all(|c| c.is_ascii_alphabetic()) && !OPCODES.contains(&first_word) {
-            if !line.contains('=')
+            // Also skip the heuristic if the first word looks like a macro call we expand:
+            // - ends with 'I' (immediate shorthand: LDAI, LDXI, LDYI, CMPI, ADCI, etc.)
+            // - ends with "DY" or "DX" (indirect indexed: LDADY, STADY, LDADX, STADX)
+            // - is a known multi-word macro name
+            let is_known_macro = first_word.ends_with('I')
+                || first_word.ends_with("DY")
+                || first_word.ends_with("DX")
+                || matches!(
+                    first_word,
+                    "STWD"
+                        | "STWX"
+                        | "STXY"
+                        | "LDWD"
+                        | "LDWX"
+                        | "LDXY"
+                        | "LDWDI"
+                        | "LDWXI"
+                        | "LDXYI"
+                        | "PSHWD"
+                        | "PULWD"
+                        | "CLR"
+                        | "COM"
+                        | "SYNCHK"
+                        | "JEQ"
+                        | "JNE"
+                        | "JCS"
+                        | "JCC"
+                        | "JMI"
+                        | "JPL"
+                        | "JVS"
+                        | "JVC"
+                        | "BCCA"
+                        | "BCSA"
+                        | "BEQA"
+                        | "BNEA"
+                        | "BMIA"
+                        | "BPLA"
+                        | "BVCA"
+                        | "BVSA"
+                        | "INCW"
+                        | "SKIP1"
+                        | "SKIP2"
+                        | "ACRLF"
+                );
+            if !is_known_macro
+                && !line.contains('=')
                 && !line.contains(':')
                 && !first_word.starts_with("ORG")
                 && !first_word.starts_with("ADR")
                 && !first_word.starts_with("DCI")
                 && !first_word.starts_with("BLOCK")
+                && !matches!(
+                    first_word,
+                    "IFE" | "IFN" | "IFNDEF" | "ELSE" | "ENDIF" | "REPEAT" | "DEFINE"
+                )
             {
                 i += 1;
                 continue;
             }
         }
-        // Drop IF1, IF2 pseudo conditionals
-        if matches!(first_word, "IF1" | "IF2") {
+        // IF1 = pass-1 code (simulator addresses), IF2 = pass-2 (real 6502 addresses).
+        // We target pass-2, so IF1 body is skipped.  Must push to cond_stack for
+        // multi-line IF1/IF2 so that the body's closing > doesn't pop an outer block.
+        // Note: these appear as "IF1,<" (comma attached, no space) so first_word is "IF1,<".
+        let if12_directive = first_word.split(',').next().unwrap_or("");
+        if matches!(if12_directive, "IF1" | "IF2") {
+            if line.contains('<') {
+                let after_comma = line.find(',').map(|p| &line[p + 1..]).unwrap_or("");
+                let is_multiline =
+                    after_comma.matches('<').count() > after_comma.matches('>').count();
+                if is_multiline {
+                    let include = if12_directive == "IF2";
+                    let active = include && !should_skip_line;
+                    cond_stack.push(Cond {
+                        active,
+                        seen_else: false,
+                    });
+                }
+            }
             i += 1;
             continue;
         }
@@ -173,6 +284,26 @@ pub fn run(src: &str) -> PreprocessResult {
             i += 1;
             continue;
         }
+        // Handle label-prefixed conditionals: "OUTDO:  IFN REALIO,<"
+        // Strip the label, emit it, and let the conditional be processed normally.
+        // This must happen BEFORE if_re/if_block_re so they can match the keyword.
+        {
+            let t = line.trim();
+            if let Some(colon_pos) = t.find(':') {
+                let after_label = t[colon_pos + 1..].trim();
+                let fw_cond = after_label
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or("")
+                    .to_ascii_uppercase();
+                if matches!(fw_cond.as_str(), "IFE" | "IFN" | "IFNDEF") {
+                    if !should_skip_line {
+                        out.push(format!("{}:", t[..colon_pos].trim()));
+                    }
+                    line = after_label.to_string();
+                }
+            }
+        }
         if let Some(cap) = if_re.captures(&line) {
             let kind = &cap[1];
             let expr = cap[2].trim();
@@ -183,7 +314,7 @@ pub fn run(src: &str) -> PreprocessResult {
                 || (kind.eq_ignore_ascii_case("IFNDEF") && !symbols.contains_key(expr));
             // Single-line conditional if body contains '>'
             if body.contains('>') {
-                if keep {
+                if keep && !should_skip_line {
                     let inner = body.split('>').next().unwrap().trim();
                     if !inner.is_empty() {
                         // process inner as a standalone line by re-running normalization path
@@ -191,10 +322,8 @@ pub fn run(src: &str) -> PreprocessResult {
                         if let Some(cap2) = equ_re.captures(&inner_line) {
                             let name = &cap2[1];
                             let expr2 = cap2[2].split(';').next().unwrap().trim();
-                            if !symbols.contains_key(name) {
-                                if let Some(v) = eval_expr(expr2, &symbols) {
-                                    symbols.insert(name.to_string(), v);
-                                }
+                            if let Some(v) = eval_expr(expr2, &symbols) {
+                                symbols.insert(name.to_string(), v);
                             }
                             out.push(format!("{} = {}", name, normalize_numeric(expr2, &oct_re)));
                         } else if let Some(cap2) = org_re.captures(&inner_line) {
@@ -203,9 +332,132 @@ pub fn run(src: &str) -> PreprocessResult {
                             if let Some(val2) = eval_expr(&norm, &symbols) {
                                 out.push(format!(".org ${:04X}", (val2 & 0xFFFF)));
                             }
+                        } else if let Some(cap2) = block_re.captures(&inner_line) {
+                            let label = cap2.get(1).map(|m| m.as_str()).unwrap_or("");
+                            let size = cap2.get(2).unwrap().as_str();
+                            if label.is_empty() {
+                                out.push(format!(".res {}", size));
+                            } else {
+                                out.push(format!("{} .res {}", label, size));
+                            }
+                        } else if let Some(cap2) = dt_re.captures(&inner_line) {
+                            let label = cap2.get(1).map(|m| m.as_str()).unwrap_or("");
+                            let word = cap2.get(2).unwrap().as_str();
+                            let bytes: Vec<String> = word
+                                .chars()
+                                .map(|ch| format!("${:02X}", (ch as u8) & 0x7F))
+                                .collect();
+                            let data = format!(".byte {}", bytes.join(", "));
+                            if label.is_empty() {
+                                out.push(data);
+                            } else {
+                                out.push(format!("{} {}", label, data));
+                            }
+                        } else if let Some(cap2) = dci_re.captures(&inner_line) {
+                            let label = cap2.get(1).map(|m| m.as_str()).unwrap_or("");
+                            let word = cap2.get(2).unwrap().as_str();
+                            let mut bytes: Vec<String> = Vec::new();
+                            for (j, ch) in word.chars().enumerate() {
+                                let mut b = (ch as u8) & 0x7F;
+                                if j == word.len() - 1 {
+                                    b |= 0x80;
+                                }
+                                bytes.push(format!("${:02X}", b));
+                            }
+                            let data = format!(".byte {}", bytes.join(", "));
+                            if label.is_empty() {
+                                out.push(data);
+                            } else {
+                                out.push(format!("{} {}", label, data));
+                            }
                         } else {
                             inner_line = normalize_numeric(&inner_line, &oct_re);
-                            out.push(inner_line);
+                            // Handle LABEL: number/symbol/hex/octal patterns
+                            if label_single_num_re.is_match(inner_line.trim()) {
+                                let cap2 = label_single_num_re.captures(inner_line.trim()).unwrap();
+                                inner_line = format!("{} .byte {}", &cap2[1], &cap2[2]);
+                            } else if label_single_sym_re.is_match(inner_line.trim()) {
+                                let cap2 = label_single_sym_re.captures(inner_line.trim()).unwrap();
+                                inner_line = format!("{} .byte {}", &cap2[1], &cap2[2]);
+                            } else {
+                                let t = inner_line.trim();
+                                if let Some(colon_pos) = t.find(':') {
+                                    let after_colon = t[colon_pos + 1..].trim();
+                                    let is_hex = after_colon.starts_with('$')
+                                        && after_colon.len() > 1
+                                        && after_colon[1..].chars().all(|c| c.is_ascii_hexdigit());
+                                    let is_octal = after_colon.starts_with("^O")
+                                        && after_colon.len() > 2
+                                        && after_colon[2..].chars().all(|c| c.is_digit(8));
+                                    if is_hex || is_octal {
+                                        let label = &t[..=colon_pos];
+                                        inner_line = format!("{} .byte {}", label, after_colon);
+                                    }
+                                }
+                            }
+                            // Convert standalone numbers to .byte directives
+                            let trimmed_inner = inner_line.trim_start();
+                            if !trimmed_inner.is_empty()
+                                && !trimmed_inner.starts_with('.')
+                                && !trimmed_inner.contains(':')
+                            {
+                                let num_part =
+                                    trimmed_inner.split_whitespace().next().unwrap_or("");
+                                if !num_part.is_empty() {
+                                    let is_num = num_part.chars().all(|c| c.is_ascii_digit())
+                                        || (num_part.starts_with('$')
+                                            && num_part[1..]
+                                                .chars()
+                                                .all(|c| c.is_ascii_hexdigit()))
+                                        || (num_part.starts_with("^O")
+                                            && num_part[2..].chars().all(|c| c.is_digit(8)));
+                                    if is_num {
+                                        inner_line = format!(".byte {}", inner_line.trim());
+                                    }
+                                }
+                            }
+                            // Handle pseudo-immediate instructions (LDAI, ORAI, etc.)
+                            let first_word = inner_line.split_whitespace().next().unwrap_or("");
+                            if first_word.len() >= 4
+                                && first_word.ends_with('I')
+                                && first_word.chars().all(|c| c.is_ascii_uppercase())
+                            {
+                                let base = &first_word[..first_word.len() - 1];
+                                if matches!(
+                                    base,
+                                    "LDA"
+                                        | "LDX"
+                                        | "LDY"
+                                        | "ADC"
+                                        | "SBC"
+                                        | "AND"
+                                        | "ORA"
+                                        | "EOR"
+                                        | "CMP"
+                                        | "CPX"
+                                        | "CPY"
+                                ) {
+                                    // Find where first_word ends in the line
+                                    if let Some(pos) = inner_line.find(first_word) {
+                                        let rest = inner_line[pos + first_word.len()..].trim();
+                                        inner_line = format!("{} #{}", base, rest);
+                                    }
+                                }
+                            }
+                            // Skip assembly-time directives that have no machine code
+                            let fw_inner = inner_line
+                                .split_whitespace()
+                                .next()
+                                .unwrap_or("")
+                                .to_ascii_uppercase();
+                            if matches!(
+                                fw_inner.as_str(),
+                                "PRINTX" | "PAGE" | "SUBTTL" | "TITLE" | "SALL" | "RADIX"
+                            ) {
+                                // Don't push to output
+                            } else {
+                                out.push(inner_line);
+                            }
                         }
                     }
                 }
@@ -213,7 +465,13 @@ pub fn run(src: &str) -> PreprocessResult {
                 i += 1;
                 continue;
             } else {
-                cond_stack.push(keep);
+                // Multi-line conditional: push to stack
+                // If we're already in an inactive block, this new block is also inactive
+                let active = if should_skip_line { false } else { keep };
+                cond_stack.push(Cond {
+                    active,
+                    seen_else: false,
+                });
                 i += 1;
                 continue;
             }
@@ -225,28 +483,67 @@ pub fn run(src: &str) -> PreprocessResult {
             let keep = (val == 0 && kind.eq_ignore_ascii_case("IFE"))
                 || (val != 0 && kind.eq_ignore_ascii_case("IFN"))
                 || (kind.eq_ignore_ascii_case("IFNDEF") && !symbols.contains_key(expr));
-            cond_stack.push(keep);
+            // If we're already in an inactive block, this new block is also inactive
+            let active = if should_skip_line { false } else { keep };
+            cond_stack.push(Cond {
+                active,
+                seen_else: false,
+            });
             i += 1;
             continue;
         }
-        if line.trim() == ">" && !cond_stack.is_empty() {
-            cond_stack.pop();
+        // Handle ELSE directive
+        if line.trim().eq_ignore_ascii_case("ELSE") && !cond_stack.is_empty() {
+            if let Some(cond) = cond_stack.last_mut() {
+                if !cond.seen_else {
+                    cond.active = !cond.active;
+                    cond.seen_else = true;
+                }
+            }
             i += 1;
             continue;
         }
-        if cond_stack.iter().any(|k| !*k) {
+        // Handle standalone ENDIF or ">"
+        if line.trim().eq_ignore_ascii_case("ENDIF") || line.trim() == ">" {
+            if !cond_stack.is_empty() {
+                cond_stack.pop();
+            }
+            i += 1;
+            continue;
+        }
+
+        // NOW skip this line if we're inside an inactive conditional
+        // (after processing all conditional directives which must be tracked even in inactive blocks)
+        if should_skip_line {
+            i += 1;
+            continue;
+        }
+        // Skip DEFINE bodies (active context only — inactive blocks are already handled above)
+        if define_re.is_match(&line) {
+            trace!(target: "assembler6502::preprocess", line=%line.trim(), "skipping DEFINE body");
+            i += 1;
+            while i < lines.len() {
+                let l = lines[i].trim_end();
+                if l.ends_with('>') {
+                    break;
+                }
+                i += 1;
+            }
             i += 1;
             continue;
         }
         if let Some(cap) = equ_re.captures(&line) {
             let name = &cap[1];
             let expr = cap[2].split(';').next().unwrap().trim();
-            if !symbols.contains_key(name) {
-                if let Some(v) = eval_expr(expr, &symbols) {
-                    symbols.insert(name.to_string(), v);
-                }
+            if let Some(v) = eval_expr(expr, &symbols) {
+                symbols.insert(name.to_string(), v);
+                // Emit the numeric value so the assembler doesn't need to re-evaluate
+                // complex expressions involving <lo-byte> or >hi-byte operators.
+                out.push(format!("{} = {}", name, v));
+                trace!(target: "assembler6502::preprocess", name=%name, value=%v, "equate evaluated");
+            } else {
+                out.push(format!("{} = {}", name, normalize_numeric(expr, &oct_re)));
             }
-            out.push(format!("{} = {}", name, normalize_numeric(expr, &oct_re)));
             i += 1;
             continue;
         }
@@ -278,6 +575,38 @@ pub fn run(src: &str) -> PreprocessResult {
             continue;
         }
         if let Some(cap) = dt_re.captures(&line) {
+            let label = cap.get(1).map(|m| m.as_str()).unwrap_or("");
+            let word = cap.get(2).unwrap().as_str();
+            let bytes: Vec<String> = word
+                .chars()
+                .map(|ch| format!("${:02X}", (ch as u8) & 0x7F))
+                .collect();
+            let data = format!(".byte {}", bytes.join(", "));
+            if label.is_empty() {
+                out.push(data);
+            } else {
+                out.push(format!("{} {}", label, data));
+            }
+            i += 1;
+            continue;
+        }
+        if let Some(cap) = dce_re.captures(&line) {
+            let label = cap.get(1).map(|m| m.as_str()).unwrap_or("");
+            let word = cap.get(2).unwrap().as_str();
+            let bytes: Vec<String> = word
+                .chars()
+                .map(|ch| format!("${:02X}", (ch as u8) & 0x7F))
+                .collect();
+            let data = format!(".byte {}", bytes.join(", "));
+            if label.is_empty() {
+                out.push(data);
+            } else {
+                out.push(format!("{} {}", label, data));
+            }
+            i += 1;
+            continue;
+        }
+        if let Some(cap) = dc_re.captures(&line) {
             let label = cap.get(1).map(|m| m.as_str()).unwrap_or("");
             let word = cap.get(2).unwrap().as_str();
             let bytes: Vec<String> = word
@@ -346,27 +675,6 @@ pub fn run(src: &str) -> PreprocessResult {
             i += 1;
             continue;
         }
-        if let Some(cap) = pseudo_imm_re.captures(&line) {
-            let base = &cap[1];
-            let rest = cap[2].trim();
-            // Only expand known immediate-capable mnemonics
-            if matches!(
-                base,
-                "LDA"
-                    | "LDX"
-                    | "LDY"
-                    | "ADC"
-                    | "SBC"
-                    | "AND"
-                    | "ORA"
-                    | "EOR"
-                    | "CMP"
-                    | "CPX"
-                    | "CPY"
-            ) {
-                line = format!("{} #{}", base, rest);
-            }
-        }
         if printx_re.is_match(&line) {
             i += 1;
             continue;
@@ -375,34 +683,58 @@ pub fn run(src: &str) -> PreprocessResult {
             i += 1;
             continue;
         }
-        // Simplify leftover macro shift/mask expressions like <<WD>&^O377> -> 0 (placeholder until evaluator improved)
-        line = angle_expr_re.replace_all(&line, "0").into_owned();
-        line = div_shift_re.replace_all(&line, "0").into_owned();
-        // Replace simple <SYMBOL> occurrences
-        line = angle_sym_re.replace_all(&line, "$1").into_owned();
-        // Remove excess trailing '>' if unmatched
-        if line.matches('<').count() < line.matches('>').count() {
-            while line.ends_with('>') && line.matches('<').count() < line.matches('>').count() {
-                line.pop();
+        // Handle REPEAT n,<body> - repeat body n times
+        if let Some(cap) = repeat_re.captures(&line) {
+            let label_opt = cap.get(1).map(|m| m.as_str());
+            let count_expr = cap[2].trim();
+            // Evaluate the expression to get the count
+            let count = if let Some(val) = eval_expr(count_expr, &symbols) {
+                val.max(0) as usize
+            } else {
+                // Try parsing as plain number if eval fails
+                count_expr.parse().unwrap_or(1)
+            };
+            let mut body = cap[3].trim();
+            // Strip trailing > characters
+            while body.ends_with('>') {
+                body = &body[..body.len() - 1].trim_end();
             }
-        }
-        // Collapse accidental marker pairs like ><SYMBOL -> <SYMBOL
-        if line.contains("><") {
-            line = line.replace("><", "<");
+            for k in 0..count {
+                let prefix = if k == 0 && label_opt.is_some() {
+                    format!("{} ", label_opt.unwrap())
+                } else {
+                    " ".to_string()
+                };
+                let normalized = prefix + &normalize_numeric(body, &oct_re);
+                out.push(normalized);
+            }
+            i += 1;
+            continue;
         }
         if symbol_only_re.is_match(line.trim()) {
             line.push(':');
         }
-        // If line is a bare number (decimal or $hex) treat as .byte (common from stripped macros producing 0)
+        //  If line is a bare number (decimal or $hex or ^Ooctal) treat as .byte (common from stripped macros producing 0)
         {
             let t = line.trim();
             if !t.is_empty()
                 && (t.chars().all(|c| c.is_ascii_digit())
                     || (t.starts_with('$')
                         && t.len() > 1
-                        && t[1..].chars().all(|c| c.is_ascii_hexdigit())))
+                        && t[1..].chars().all(|c| c.is_ascii_hexdigit()))
+                    || (t.starts_with("^O")
+                        && t.len() > 2
+                        && t[2..].chars().all(|c| c.is_digit(8))))
             {
                 line = format!(".byte {}", t);
+            } else if !t.is_empty() && !t.contains(':') && !t.contains('=') {
+                // Try to evaluate as expression (e.g., "333--ADDPRC")
+                if let Some(val) = eval_expr(t, &symbols) {
+                    // Output in octal format (^O prefix) to match RADIX 8 context
+                    if val >= 0 && val <= 511 {
+                        line = format!(".byte ^O{:o}", val);
+                    }
+                }
             }
         }
         // If line is sequence of hex byte tokens (e.g. $82 $0A $FF) convert to .byte list
@@ -463,14 +795,67 @@ pub fn run(src: &str) -> PreprocessResult {
                 line = format!("{} .byte {}", label, sym);
             }
         }
-        // Simple multi-byte load/store macro expansion (subset): LDWX/LDWD/LDXY/STWD/STWX/STXY
-        // We stripped original DEFINEs, so expand calls here.
+        // If line is LABEL: $HEX (like PIVAL: $82), convert to .byte
+        {
+            let t = line.trim();
+            if let Some(colon_pos) = t.find(':') {
+                let after_colon = t[colon_pos + 1..].trim();
+                let is_hex = after_colon.starts_with('$')
+                    && after_colon.len() > 1
+                    && after_colon[1..].chars().all(|c| c.is_ascii_hexdigit());
+                let is_octal = after_colon.starts_with("^O")
+                    && after_colon.len() > 2
+                    && after_colon[2..].chars().all(|c| c.is_digit(8));
+                if is_hex || is_octal {
+                    let label = &t[..=colon_pos];
+                    line = format!("{} .byte {}", label, after_colon);
+                }
+            }
+        }
+        // If line is a quoted single character (like "T" or "("+128), convert to .byte
+        {
+            let t = line.trim();
+            if t.starts_with('"') && t.len() >= 3 {
+                // Match patterns like "X" or "X"+128 or "X"-1
+                if let Some(close_quote) = t[1..].find('"') {
+                    let char_part = &t[1..close_quote + 1];
+                    if char_part.len() == 1 {
+                        let ch = char_part.chars().next().unwrap();
+                        let base_val = ch as u8;
+                        let rest = t[close_quote + 2..].trim();
+                        if rest.is_empty() {
+                            line = format!(".byte ${:02X}", base_val);
+                        } else if let Some(add) = rest.strip_prefix('+') {
+                            if let Ok(offset) = add.trim().parse::<i32>() {
+                                let val = (base_val as i32 + offset) & 0xFF;
+                                line = format!(".byte ${:02X}", val);
+                            }
+                        } else if let Some(sub) = rest.strip_prefix('-') {
+                            if let Ok(offset) = sub.trim().parse::<i32>() {
+                                let val = (base_val as i32 - offset) & 0xFF;
+                                line = format!(".byte ${:02X}", val);
+                            }
+                        }
+                    }
+                }
+            }
+        } // Simple multi-byte load/store macro expansion (subset): LDWX/LDWD/LDXY/STWD/STWX/STXY
+          // We stripped original DEFINEs, so expand calls here.
         {
             let mut label_prefix = "";
             let mut rest = line.as_str();
             if let Some(colon_pos) = line.find(':') {
-                label_prefix = &line[..colon_pos + 1];
-                rest = line[colon_pos + 1..].trim();
+                // Only treat as label if everything before ':' (trimmed) is valid label chars.
+                // This avoids mistaking the ':' inside quoted strings like `":"` as a label sep.
+                let before = line[..colon_pos].trim();
+                if !before.is_empty()
+                    && before
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || "_.$".contains(c))
+                {
+                    label_prefix = &line[..colon_pos + 1];
+                    rest = line[colon_pos + 1..].trim();
+                }
             }
             let mut parts = rest.split_whitespace();
             if let Some(op) = parts.next() {
@@ -512,19 +897,27 @@ pub fn run(src: &str) -> PreprocessResult {
                         i += 1;
                         continue;
                     }
-                    // Single-token indexed shorthand: e.g. LDADY LABEL -> LDA LABEL,Y ; CMPDY FOO -> CMP FOO,Y
+                    // Indirect-indexed shorthand:
+                    //   LDADY addr -> LDA (addr),Y  (indirect indexed, opcode $B1)
+                    //   STADY addr -> STA (addr),Y  (indirect indexed, opcode $91)
+                    //   LDADX addr -> LDA (addr,X)  (indexed indirect, opcode $A1)
+                    //   STADX addr -> STA (addr,X)  (indexed indirect, opcode $81)
+                    // NOTE: these are NOT the same as absolute indexed (LDA addr,Y / LDA addr,X).
                     if (opu.ends_with("DY") || opu.ends_with("DX")) && opu.len() > 2 {
                         let base = &opu[..opu.len() - 2];
                         let idx_suffix = &opu[opu.len() - 2..];
                         if matches!(
                             base,
-                            "LDA" | "STA" | "CMP" | "ADC" | "SBC" | "AND" | "ORA" | "EOR" | "BIT"
+                            "LDA" | "STA" | "CMP" | "ADC" | "SBC" | "AND" | "ORA" | "EOR"
                         ) {
                             let final_line = if idx_suffix == "DY" {
-                                format!("{} {} {},Y", label_prefix, base, a)
+                                // (addr),Y  — indirect indexed (Y is OUTSIDE the parens)
+                                format!("{} {} ({}),Y", label_prefix, base, a)
                             } else {
-                                format!("{} {} {},X", label_prefix, base, a)
+                                // (addr,X)  — indexed indirect (X is inside the parens)
+                                format!("{} {} ({},X)", label_prefix, base, a)
                             };
+                            trace!(target: "assembler6502::preprocess", src=%line, expanded=%final_line, "indirect-indexed expansion");
                             let norm = normalize_numeric(&final_line, &oct_re);
                             out.push(norm);
                             i += 1;
@@ -532,7 +925,10 @@ pub fn run(src: &str) -> PreprocessResult {
                         }
                     }
                     let expand = match opu.as_str() {
-                        "SYNCHK" => Some(vec![format!("{} JSR SYNCHK", label_prefix)]),
+                        "SYNCHK" => Some(vec![
+                            format!("{} LDA #{}", label_prefix, a),
+                            "JSR SYNCHR".to_string(),
+                        ]),
                         // Push 16-bit value (heuristic: low then high)
                         "PSHWD" => Some(vec![
                             format!("{} LDA {}", label_prefix, a),
@@ -550,6 +946,12 @@ pub fn run(src: &str) -> PreprocessResult {
                         // CLR addr: emulate by loading A with 0 then storing
                         "CLR" => Some(vec![
                             format!("{} LDA #0", label_prefix),
+                            format!("STA {}", a),
+                        ]),
+                        // COM addr: complement (XOR with $FF)
+                        "COM" => Some(vec![
+                            format!("{} LDA {}", label_prefix, a),
+                            format!("EOR #$FF"),
                             format!("STA {}", a),
                         ]),
                         "LDWX" => Some(vec![
@@ -576,6 +978,15 @@ pub fn run(src: &str) -> PreprocessResult {
                             format!("{} STX {}", label_prefix, a),
                             format!("STY {}+1", a),
                         ]),
+                        // Branch-always aliases (DEFINE-defined in source)
+                        "BCCA" => Some(vec![format!("{} BCC {}", label_prefix, a)]),
+                        "BCSA" => Some(vec![format!("{} BCS {}", label_prefix, a)]),
+                        "BEQA" => Some(vec![format!("{} BEQ {}", label_prefix, a)]),
+                        "BNEA" => Some(vec![format!("{} BNE {}", label_prefix, a)]),
+                        "BMIA" => Some(vec![format!("{} BMI {}", label_prefix, a)]),
+                        "BPLA" => Some(vec![format!("{} BPL {}", label_prefix, a)]),
+                        "BVCA" => Some(vec![format!("{} BVC {}", label_prefix, a)]),
+                        "BVSA" => Some(vec![format!("{} BVS {}", label_prefix, a)]),
                         "LDWDI" => {
                             let inner = if a.starts_with('<') && a.ends_with('>') && a.len() > 2 {
                                 &a[1..a.len() - 1]
@@ -612,18 +1023,14 @@ pub fn run(src: &str) -> PreprocessResult {
                         _ => None,
                     };
                     if let Some(lines_expanded) = expand {
-                        for (idx, ln) in lines_expanded.into_iter().enumerate() {
+                        trace!(target: "assembler6502::preprocess", src=%line, n=%lines_expanded.len(), "macro expansion");
+                        for ln in lines_expanded {
                             let normalized = normalize_numeric(&ln, &oct_re);
-                            if idx == 0 {
-                                out.push(normalized);
-                            } else {
-                                out.push(normalized);
-                            }
+                            out.push(normalized);
                         }
                         i += 1;
                         continue; // move to next original source line
                     }
-                    // Immediate shorthand with trailing 'I' (e.g., LDAI 10) including label-prefixed forms
                     if opu.ends_with('I') && opu.len() >= 3 {
                         let base = &opu[..opu.len() - 1];
                         if matches!(
@@ -640,7 +1047,9 @@ pub fn run(src: &str) -> PreprocessResult {
                                 | "CPX"
                                 | "CPY"
                         ) {
-                            let newline = format!("{} {} #{}", label_prefix, base, a);
+                            let operand = simplify_hi_lo_angles(a, &symbols);
+                            let newline = format!("{} {} #{}", label_prefix, base, operand);
+                            trace!(target: "assembler6502::preprocess", src=%line, expanded=%newline, "immediate shorthand");
                             let norm = normalize_numeric(&newline, &oct_re);
                             out.push(norm);
                             i += 1;
@@ -650,16 +1059,39 @@ pub fn run(src: &str) -> PreprocessResult {
                 }
             }
         }
-        // Final guard: drop any stray IFN/IFE lines not handled above
+        // Final guard: drop any stray IFN/IFE/IF1/IF2 lines not handled above
         let fw = line.split_whitespace().next().unwrap_or("");
-        if ["IFN", "IFE", "IFNDEF"]
+        if ["IFN", "IFE", "IFNDEF", "IF1", "IF2"]
             .iter()
-            .any(|w| fw.eq_ignore_ascii_case(w))
+            .any(|w| fw.to_ascii_uppercase().starts_with(w))
         {
             i += 1;
             continue;
         }
         line = normalize_numeric(&line, &oct_re);
+        // Convert standalone numbers to .byte directives
+        let trimmed = line.trim_start();
+        if !trimmed.is_empty()
+            && !trimmed.starts_with('.')
+            && !trimmed.contains(':')
+            && (trimmed.chars().next().unwrap().is_ascii_digit()
+                || trimmed.starts_with('$')
+                || trimmed.starts_with("^O"))
+        {
+            // Check if it's just a number (possibly with whitespace/comment)
+            let num_part = trimmed.split_whitespace().next().unwrap_or("");
+            if !num_part.is_empty() {
+                let is_num = num_part.chars().all(|c| c.is_ascii_digit())
+                    || (num_part.starts_with('$')
+                        && num_part[1..].chars().all(|c| c.is_ascii_hexdigit()))
+                    || (num_part.starts_with("^O") && num_part[2..].chars().all(|c| c.is_digit(8)));
+                if is_num {
+                    let old = line.trim().to_string();
+                    line = format!(".byte {}", old);
+                    trace!(target: "assembler6502::preprocess", src=%old, expanded=%line, "bare number → .byte");
+                }
+            }
+        }
         out.push(line);
         i += 1;
     }
@@ -723,18 +1155,165 @@ fn eval_expr(expr: &str, symbols: &HashMap<String, i64>) -> Option<i64> {
                 .unwrap_or("0".to_string())
         })
         .into_owned();
+    // Replace quoted single-char literals "X" with ASCII decimal value (e.g. "Z" → 90)
+    let char_re = Regex::new(r#""(.)""#).unwrap();
+    s = char_re
+        .replace_all(&s, |m: &regex::Captures| {
+            format!("{}", m[1].chars().next().unwrap_or('\0') as u32)
+        })
+        .into_owned();
+    // Expand <...> bracketed groups using a depth-tracking stack walk.
+    // <> in this source is purely arithmetic grouping (like parentheses) —
+    // the correct tool is a state machine, not a regex.
+    s = expand_angle_groups(&s);
     if !s
         .chars()
         .all(|c| c.is_ascii_digit() || "+-*/() ".contains(c))
     {
         return None;
     }
-    // simple eval: split by operators; use meval? implement minimal using eval crate? We'll implement basic left to right with + - only
-    // For now just use rust eval via meval-like minimal: safely filter
     match eval_simple(&s) {
         Ok(v) => Some(v),
         Err(_) => None,
     }
+}
+
+/// Simplify angle-bracket arithmetic in an instruction OPERAND before emitting.
+/// Uses the state-machine depth counter to find balanced `<inner>` groups.
+///
+/// When the inner content can be fully evaluated (all symbols known), replace
+/// with the number.  When it can't (code label not yet resolved), apply the
+/// semantic mappings that the downstream assembler understands:
+///
+///   <<X>/256>   →  >X     (high byte of X)
+///   <<X>/^O400> →  >X     (same, octal form)
+///   <<X>&^O377> →  <X     (low byte of X)
+///   <<X>&255>   →  <X
+///
+fn simplify_hi_lo_angles(s: &str, symbols: &HashMap<String, i64>) -> String {
+    // Fast path: if the whole expression can be fully evaluated, return the number.
+    if let Some(v) = eval_expr(s, symbols) {
+        return v.to_string();
+    }
+    let chars: Vec<char> = s.chars().collect();
+    let mut out = String::with_capacity(s.len());
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] == '<' {
+            let mut depth = 1usize;
+            let mut j = i + 1;
+            while j < chars.len() && depth > 0 {
+                if chars[j] == '<' {
+                    depth += 1;
+                }
+                if chars[j] == '>' {
+                    depth -= 1;
+                }
+                j += 1;
+            }
+            let inner: String = chars[i + 1..j - 1].iter().collect();
+            // First try: fully evaluate (works when all sub-symbols are constants).
+            let expanded = expand_angle_groups(inner.trim());
+            if let Ok(v) = eval_simple(&expanded) {
+                out.push_str(&v.to_string());
+                i = j;
+                continue;
+            }
+            // Still has unknown symbols — apply semantic /256 → > and &255 → < mappings.
+            // Both patterns take the form <<EXPR>/N> or <<EXPR>&N>.
+            // Use a nested depth-walk to find the leading <EXPR> sub-group.
+            if inner.starts_with('<') {
+                // Find the balanced sub-group at the start of `inner`.
+                let inner_chars: Vec<char> = inner.chars().collect();
+                let mut d2 = 1usize;
+                let mut k = 1;
+                while k < inner_chars.len() && d2 > 0 {
+                    if inner_chars[k] == '<' {
+                        d2 += 1;
+                    }
+                    if inner_chars[k] == '>' {
+                        d2 -= 1;
+                    }
+                    k += 1;
+                }
+                // inner_chars[1..k-1] = the sub-expression; inner_chars[k..] = operator + divisor
+                let sub_expr: String = inner_chars[1..k - 1].iter().collect();
+                let tail: String = inner_chars[k..]
+                    .iter()
+                    .collect::<String>()
+                    .trim_start()
+                    .to_string();
+                let lo_byte = tail.starts_with("&^O377")
+                    || tail.starts_with("&255")
+                    || tail.starts_with("&$FF")
+                    || tail.starts_with("&$ff");
+                let hi_byte = tail.starts_with("/^O400")
+                    || tail.starts_with("/256")
+                    || tail.starts_with("/$100");
+                if hi_byte {
+                    out.push('>');
+                    out.push_str(sub_expr.trim());
+                    i = j;
+                    continue;
+                } else if lo_byte {
+                    out.push('<');
+                    out.push_str(sub_expr.trim());
+                    i = j;
+                    continue;
+                }
+            }
+            // Unknown pattern — keep as-is; assembler will report an error if needed.
+            out.push('<');
+            out.push_str(&inner);
+            out.push('>');
+            i = j;
+        } else {
+            out.push(chars[i]);
+            i += 1;
+        }
+    }
+    out
+}
+
+/// When a balanced `<inner>` pair is found, evaluate `inner` recursively
+/// and replace the whole `<inner>` with the numeric result.
+fn expand_angle_groups(s: &str) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    let mut out = String::with_capacity(s.len());
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] == '<' {
+            // Find the matching > using a depth counter
+            let mut depth = 1usize;
+            let mut j = i + 1;
+            while j < chars.len() && depth > 0 {
+                if chars[j] == '<' {
+                    depth += 1;
+                }
+                if chars[j] == '>' {
+                    depth -= 1;
+                }
+                j += 1;
+            }
+            // chars[i+1..j-1] is the balanced inner content
+            let inner: String = chars[i + 1..j - 1].iter().collect();
+            // Recursively expand nested groups, then try to evaluate
+            let expanded = expand_angle_groups(inner.trim());
+            if let Ok(v) = eval_simple(&expanded) {
+                out.push_str(&v.to_string());
+            } else {
+                // Can't evaluate — keep as-is (will cause None from caller)
+                out.push('<');
+                out.push_str(&inner);
+                out.push('>');
+            }
+            i = j;
+        } else {
+            out.push(chars[i]);
+            i += 1;
+        }
+    }
+    out
 }
 
 fn eval_simple(s: &str) -> Result<i64, ()> {

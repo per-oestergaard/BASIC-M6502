@@ -6,6 +6,9 @@
     "./target/debug/dump_all": true,
     "./target/debug/asm": true,
     "cargo clean": true,
-    "awk": true
+    "awk": true,
+    "./target/release/dump_all": true,
+    "./target/release/asm": true,
+    "cargo test": true
   }
 }

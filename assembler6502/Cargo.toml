@@ -8,6 +8,8 @@ anyhow = "1.0.99"
 thiserror = "2.0.16"
 lazy_static = "1"
 regex = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [[bin]]
 name = "asm"

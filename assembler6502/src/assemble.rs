@@ -225,7 +225,12 @@ impl Assembler {
                         }
                         pc = pc.wrapping_add(size_for(mode) as u16);
                     } else {
-                        bail!("Opcode not found for {} {:?} at preprocessed line {}", mnem, mode, line_idx + 1);
+                        bail!(
+                            "Opcode not found for {} {:?} at preprocessed line {}",
+                            mnem,
+                            mode,
+                            line_idx + 1
+                        );
                     }
                 }
                 _ => {}
@@ -234,7 +239,10 @@ impl Assembler {
         // Resolve fixups now that all labels collected
         for f in &fixups {
             if std::env::var("DEBUG_FIXUP").is_ok() {
-                eprintln!("Fixup: symbol='{}', offset={}, mode={:?}", f.symbol, f.offset, f.mode);
+                eprintln!(
+                    "Fixup: symbol='{}', offset={}, mode={:?}",
+                    f.symbol, f.offset, f.mode
+                );
             }
             let target = sym
                 .get(&f.symbol)
@@ -340,7 +348,12 @@ fn infer_mode(mnem: &str, operand: Option<&str>, sym: &HashMap<String, u16>) -> 
         }
         return Imp;
     }
-    let op = operand.unwrap().trim();
+    let mut op = operand.unwrap().trim().to_string();
+    // Strip trailing commas (statement separators in MACRO-10)
+    while op.ends_with(',') {
+        op.pop();
+    }
+    let op = op.trim();
     // Check for explicit "A" operand for accumulator mode
     if op.eq_ignore_ascii_case("a") {
         let m = mnem.to_ascii_uppercase();
@@ -354,10 +367,10 @@ fn infer_mode(mnem: &str, operand: Option<&str>, sym: &HashMap<String, u16>) -> 
     }
     if op.starts_with('(') {
         if op.ends_with(",X)") {
-            return IndX;
+            return IndX; // (addr,X) — indexed indirect
         }
-        if op.ends_with(",Y)") {
-            return IndY;
+        if op.ends_with("),Y") {
+            return IndY; // (addr),Y — indirect indexed
         }
         return Ind;
     }
@@ -542,11 +555,8 @@ fn build_operand_bytes(
             }
         }
         Zp | ZpX | ZpY | IndX | IndY => {
-            let base = if raw.ends_with(",X") {
-                raw.trim_end_matches(",X").trim()
-            } else if raw.ends_with(",Y") {
-                raw.trim_end_matches(",Y").trim()
-            } else if raw.starts_with('(') && raw.ends_with(",X)") {
+            let base = if raw.starts_with('(') && raw.ends_with(",X)") {
+                // IndX: (addr,X) — extract addr
                 let inner = &raw[1..raw.len() - 1];
                 if let Some(p) = inner.rfind(',') {
                     inner[..p].trim()
@@ -554,6 +564,7 @@ fn build_operand_bytes(
                     inner.trim()
                 }
             } else if raw.starts_with('(') && raw.contains("),Y") {
+                // IndY: (addr),Y — extract addr
                 let mut t = raw.trim();
                 if t.ends_with(",Y") {
                     t = t.trim_end_matches(",Y");
@@ -561,6 +572,10 @@ fn build_operand_bytes(
                 t = t.trim_end_matches(')');
                 t = t.trim_start_matches('(');
                 t.trim()
+            } else if raw.ends_with(",X") {
+                raw.trim_end_matches(",X").trim()
+            } else if raw.ends_with(",Y") {
+                raw.trim_end_matches(",Y").trim()
             } else {
                 raw
             };
@@ -1042,14 +1057,14 @@ fn resolve_value(token: &str, sym: &HashMap<String, u16>) -> Result<u16> {
 /// Returns the computed value if all symbols are resolved
 fn eval_multi_symbol_expr(expr: &str, sym: &HashMap<String, u16>) -> Result<u16> {
     use std::collections::VecDeque;
-    
+
     let expr = expr.trim();
-    
+
     // First pass: substitute all symbols with their numeric values
     let mut processed = String::new();
     let mut current_symbol = String::new();
     let mut in_hex = false;
-    
+
     for ch in expr.chars() {
         if ch == '$' {
             if !current_symbol.is_empty() {
@@ -1057,7 +1072,11 @@ fn eval_multi_symbol_expr(expr: &str, sym: &HashMap<String, u16>) -> Result<u16>
                 if let Some(&val) = sym.get(&current_symbol) {
                     processed.push_str(&val.to_string());
                 } else {
-                    bail!("Unknown symbol '{}' in expression '{}'", current_symbol, expr);
+                    bail!(
+                        "Unknown symbol '{}' in expression '{}'",
+                        current_symbol,
+                        expr
+                    );
                 }
                 current_symbol.clear();
             }
@@ -1078,14 +1097,18 @@ fn eval_multi_symbol_expr(expr: &str, sym: &HashMap<String, u16>) -> Result<u16>
                 } else if let Some(&val) = sym.get(&current_symbol) {
                     processed.push_str(&val.to_string());
                 } else {
-                    bail!("Unknown symbol '{}' in expression '{}'", current_symbol, expr);
+                    bail!(
+                        "Unknown symbol '{}' in expression '{}'",
+                        current_symbol,
+                        expr
+                    );
                 }
                 current_symbol.clear();
             }
             processed.push(ch);
         }
     }
-    
+
     // Flush any remaining symbol
     if !current_symbol.is_empty() {
         if let Ok(num) = current_symbol.parse::<i64>() {
@@ -1093,10 +1116,14 @@ fn eval_multi_symbol_expr(expr: &str, sym: &HashMap<String, u16>) -> Result<u16>
         } else if let Some(&val) = sym.get(&current_symbol) {
             processed.push_str(&val.to_string());
         } else {
-            bail!("Unknown symbol '{}' in expression '{}'", current_symbol, expr);
+            bail!(
+                "Unknown symbol '{}' in expression '{}'",
+                current_symbol,
+                expr
+            );
         }
     }
-    
+
     // Second pass: evaluate arithmetic expression with operator precedence
     // Convert hex numbers to decimal
     let processed = {
@@ -1124,16 +1151,16 @@ fn eval_multi_symbol_expr(expr: &str, sym: &HashMap<String, u16>) -> Result<u16>
         }
         result
     };
-    
+
     // Simple expression evaluator: handles +, -, *, / with precedence
     fn eval_expr(s: &str) -> Result<i64> {
         // Remove whitespace
         let s = s.chars().filter(|c| !c.is_whitespace()).collect::<String>();
-        
+
         // Parse into tokens
         let mut tokens = Vec::new();
         let mut num = String::new();
-        
+
         for ch in s.chars() {
             if ch.is_ascii_digit() {
                 num.push(ch);
@@ -1154,12 +1181,12 @@ fn eval_multi_symbol_expr(expr: &str, sym: &HashMap<String, u16>) -> Result<u16>
         if !num.is_empty() {
             tokens.push(num);
         }
-        
+
         // Simple recursive descent parser
         fn parse_expr(tokens: &mut VecDeque<String>) -> Result<i64> {
             parse_add_sub(tokens)
         }
-        
+
         fn parse_add_sub(tokens: &mut VecDeque<String>) -> Result<i64> {
             let mut left = parse_mul_div(tokens)?;
             while !tokens.is_empty() {
@@ -1178,7 +1205,7 @@ fn eval_multi_symbol_expr(expr: &str, sym: &HashMap<String, u16>) -> Result<u16>
             }
             Ok(left)
         }
-        
+
         fn parse_mul_div(tokens: &mut VecDeque<String>) -> Result<i64> {
             let mut left = parse_primary(tokens)?;
             while !tokens.is_empty() {
@@ -1200,12 +1227,12 @@ fn eval_multi_symbol_expr(expr: &str, sym: &HashMap<String, u16>) -> Result<u16>
             }
             Ok(left)
         }
-        
+
         fn parse_primary(tokens: &mut VecDeque<String>) -> Result<i64> {
             if tokens.is_empty() {
                 bail!("Unexpected end of expression");
             }
-            
+
             let token = tokens.pop_front().unwrap();
             if token == "(" {
                 let result = parse_expr(tokens)?;
@@ -1219,11 +1246,11 @@ fn eval_multi_symbol_expr(expr: &str, sym: &HashMap<String, u16>) -> Result<u16>
                 bail!("Unexpected token: {}", token);
             }
         }
-        
+
         let mut token_queue: VecDeque<String> = tokens.into_iter().collect();
         parse_expr(&mut token_queue)
     }
-    
+
     let result = eval_expr(&processed)?;
     Ok((result & 0xFFFF) as u16)
 }
