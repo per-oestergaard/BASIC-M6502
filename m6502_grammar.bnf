@@ -1,0 +1,170 @@
+<file>         ::= <line>*
+
+<line>         ::= <label-def>? <statement>? <inline-comment>? <EOL>
+               |   <label-def>? <inline-comment>? <EOL>   (* label-only or comment-only line *)
+
+(* Inline comment: semicolon and everything after it, to end of line.
+   There are no quoted semicolons in this source, so ";" always starts a comment.
+   Stripped BEFORE any angle-bracket counting. *)
+<inline-comment> ::= ";" <rest-of-line>
+
+<label-def>    ::= <symbol> "::"          (* global strong label *)
+               |   <symbol> ":"           (* local label *)
+
+<statement>    ::= <directive>
+               |   <conditional>
+               |   <macro-def>
+               |   <macro-call>
+               |   <pseudo-op>
+               |   <instr>
+               |   <equate>
+
+(* ── Equates ────────────────────────────────────────────────────────────── *)
+<equate>       ::= <symbol> "==" <expr>   (* strong equate *)
+               |   <symbol> "=" <expr>    (* soft equate *)
+
+(* ── Directives ─────────────────────────────────────────────────────────── *)
+<directive>    ::= "ORG"    <expr>
+               |   ".res"   <expr>
+               |   "BLOCK"  <expr>
+               |   ".byte"  <expr-list>
+               |   ".word"  <expr-list>
+               |   "ADR"    "(" <symbol> ")"
+               |   "EXP"    <expr>
+               |   "XWD"    <expr> "," <expr>
+               |   "DC"     <string>
+               |   "DCI"    <string>
+               |   "RADIX"  <decimal-digits>
+               |   "REPEAT" <expr> "," <block>
+               |   "IRPC"   <symbol> "," <block>
+               |   "COMMENT" <comment-block>
+               |   "TITLE"  <rest-of-line>   (* ignored *)
+               |   "SUBTTL" <rest-of-line>   (* ignored *)
+               |   "SEARCH" <rest-of-line>   (* ignored *)
+               |   "SALL"                    (* ignored *)
+               |   "PAGE"                    (* ignored *)
+               |   "PRINTX" <rest-of-line>   (* ignored *)
+               |   "XLIST"                   (* ignored *)
+               |   "LIST"                    (* ignored *)
+               |   "PURGE"  <symbol-list>    (* ignored *)
+
+(* COMMENT is MULTI-LINE.
+   Syntax:  COMMENT <delim> [rest of opening line ignored]
+            ... any number of lines ...
+            <delim>                        <- closing delimiter ALONE on its own line
+   <delim> is the first non-whitespace character after the keyword (commonly "*").
+   The body may contain ";", "<", ">" — it is fully opaque.
+*)
+<comment-block>  ::= <delim-char> <rest-of-line> <any-lines> <EOL> <delim-char> <EOL>
+<delim-char>     ::= (* the first non-whitespace character following "COMMENT" *)
+<any-lines>      ::= (* zero or more lines of arbitrary text, none of which
+                        consists solely of <delim-char> *)
+
+(* ── Conditionals ───────────────────────────────────────────────────────── *)
+<conditional>  ::= <if-stmt>
+               |   "ELSE"
+               |   "ENDIF"
+
+<if-stmt>      ::= "IFE"    <expr> "," <block>
+               |   "IFN"    <expr> "," <block>
+               |   "IFNDEF" <symbol> "," <block>
+               |   "IFDEF"  <symbol> "," <block>
+               |   "IF1"    "," <block>        (* pass 1 only *)
+               |   "IF2"    "," <block>        (* pass 2 only *)
+               |   "IFDIF"  <block> <block>    (* used in IRPC bodies *)
+
+<block>        ::= "<" <line>* ">"             (* single-line after step4: § as separator *)
+
+(* ── Macro definition ───────────────────────────────────────────────────── *)
+<macro-def>    ::= "DEFINE" <symbol> <param-list>? "," <block>
+
+<param-list>   ::= "(" <symbol> ("," <symbol>)* ")"
+
+(* ── Macro call ─────────────────────────────────────────────────────────── *)
+<macro-call>   ::= <symbol> <macro-arg>?
+
+<macro-arg>    ::= "(" <expr> ")"    (* parenthesised form *)
+               |   <rest-of-line>    (* bare form — ends at EOL *)
+
+(* ── 6502 instructions ──────────────────────────────────────────────────── *)
+<instr>        ::= <mnemonic> <operand>?
+
+<mnemonic>     ::= "ADC" | "AND" | "ASL" | "BCC" | "BCS" | "BEQ" | "BIT"
+               |   "BMI" | "BNE" | "BPL" | "BRK" | "BVC" | "BVS" | "CLC"
+               |   "CLD" | "CLI" | "CLV" | "CMP" | "CPX" | "CPY" | "DEC"
+               |   "DEX" | "DEY" | "EOR" | "INC" | "INX" | "INY" | "JMP"
+               |   "JSR" | "LDA" | "LDX" | "LDY" | "LSR" | "NOP" | "ORA"
+               |   "PHA" | "PHP" | "PLA" | "PLP" | "ROL" | "ROR" | "RTI"
+               |   "RTS" | "SBC" | "SEC" | "SED" | "SEI" | "STA" | "STX"
+               |   "STY" | "TAX" | "TAY" | "TSX" | "TXA" | "TXS" | "TYA"
+
+<operand>      ::= "#" <expr>                  (* immediate    *)
+               |   "(" <expr> ",X)"            (* indexed indirect *)
+               |   "(" <expr> "),Y"            (* indirect indexed *)
+               |   "(" <expr> ")"              (* indirect absolute *)
+               |   <expr> ",X"                 (* absolute/ZP indexed X *)
+               |   <expr> ",Y"                 (* absolute/ZP indexed Y *)
+               |   <expr>                      (* absolute / ZP / relative *)
+
+(* ── MACRO-10 pseudo-ops (expanded by preprocessor) ────────────────────── *)
+<pseudo-op>    ::= "LDAI"  <expr>   |   "LDXI"  <expr>   |   "LDYI"  <expr>
+               |   "CMPI"  <expr>   |   "CPXI"  <expr>   |   "CPYI"  <expr>
+               |   "ADCI"  <expr>   |   "SBCI"  <expr>   |   "ANDI"  <expr>
+               |   "ORAI"  <expr>   |   "EORI"  <expr>
+               |   "LDWD"  <expr>   |   "LDWX"  <expr>   |   "LDXY"  <expr>
+               |   "LDWDI" <expr>   |   "LDWXI" <expr>   |   "LDXYI" <expr>
+               |   "STWD"  <expr>   |   "STWX"  <expr>   |   "STXY"  <expr>
+               |   "LDADY" <expr>   |   "STADY" <expr>
+               |   "LDADX" <expr>   |   "STADX" <expr>
+               |   "PSHWD" <expr>   |   "PULWD" <expr>
+               |   "CLR"   <expr>   |   "COM"   <expr>
+               |   "SYNCHK" <expr>
+               |   "JEQ"   <expr>   |   "JNE"   <expr>
+               |   "JCS"   <expr>   |   "JCC"   <expr>
+               |   "JMI"   <expr>   |   "JPL"   <expr>
+               |   "JVS"   <expr>   |   "JVC"   <expr>
+               |   "ACRLF"
+               |   "BCCA"  <expr>   |   "BCSA"  <expr>
+               |   "BEQA"  <expr>   |   "BNEA"  <expr>
+               |   "BMIA"  <expr>   |   "BPLA"  <expr>
+               |   "BVCA"  <expr>   |   "BVSA"  <expr>
+               |   "INCW"  <expr>
+               |   "SKIP1" |   "SKIP2"
+
+(* ── Expressions ────────────────────────────────────────────────────────── *)
+<expr>         ::= <expr> "+" <term>
+               |   <expr> "-" <term>
+               |   <expr> "&" <term>    (* bitwise AND *)
+               |   <expr> "!" <term>    (* bitwise OR  *)
+               |   <term>
+
+<term>         ::= <term> "*" <unary>
+               |   <term> "/" <unary>
+               |   <unary>
+
+<unary>        ::= "-" <unary>
+               |   "<" <expr> ">"       (* grouped sub-expression *)
+               |   <atom>
+
+<atom>         ::= <decimal-digits>
+               |   "^O" <octal-digits>  (* octal literal *)
+               |   "$" <hex-digits>     (* hex literal   *)
+               |   <string-char>        (* e.g. " " = 32 *)
+               |   <symbol>
+               |   "."                  (* current PC    *)
+
+(* ── Terminals ──────────────────────────────────────────────────────────── *)
+<symbol>       ::= <sym-start> <sym-cont>*
+<sym-start>    ::= LETTER | "_" | "." | "$"
+<sym-cont>     ::= LETTER | DIGIT | "_" | "." | "$"
+
+<string>       ::= '"' <char>* '"'
+
+<decimal-digits> ::= DIGIT+
+<octal-digits>   ::= [0-7]+
+<hex-digits>     ::= [0-9A-Fa-f]+
+
+<expr-list>    ::= <expr> ("," <expr>)*
+<symbol-list>  ::= <symbol> ("," <symbol>)*
+<rest-of-line> ::= (* everything up to EOL *)
+<EOL>          ::= "\n"

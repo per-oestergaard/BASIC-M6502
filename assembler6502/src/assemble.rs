@@ -1,5 +1,8 @@
+use crate::ast::FlatStmt;
+use crate::expander::Expander;
 use crate::opcode::{lookup, size_for, AddrMode};
 use crate::parse::{lex_line, Line};
+use crate::parser::parse as parse_ast;
 use crate::preprocess;
 use anyhow::{bail, Result};
 use std::collections::HashMap;
@@ -295,6 +298,323 @@ impl Assembler {
         }
         Ok((out, sym))
     }
+
+    /// Full pipeline: parse MACRO-10 source via AST → expand → assemble.
+    ///
+    /// This is the new primary entry point.  It replaces the old
+    /// preprocess → lex → assemble pipeline.
+    pub fn assemble_ast(&self, source: &str) -> Result<(Vec<u8>, HashMap<String, u16>)> {
+        // Stage 1: parse into AST
+        let nodes = parse_ast(source)?;
+        // Stage 2: expand macros/conditionals into flat statements
+        let mut expander = Expander::new();
+        let flat = expander.expand(nodes)?;
+        // Stage 3: convert FlatStmt → Line and assemble
+        let lines_parsed = flat_to_lines(&flat);
+        // Seed symbol table with equates produced by expander
+        let mut sym: HashMap<String, u16> = HashMap::new();
+        for stmt in &flat {
+            if let FlatStmt::Equate { name, value } = stmt {
+                if *value >= 0 && *value <= 0xFFFF {
+                    sym.insert(name.clone(), *value as u16);
+                }
+            }
+        }
+        self.assemble_lines(&lines_parsed, sym)
+    }
+
+    /// Core two-pass assembler that works on a pre-parsed `Vec<Line>`.
+    pub fn assemble_lines(
+        &self,
+        lines_parsed: &[Line],
+        mut sym: HashMap<String, u16>,
+    ) -> Result<(Vec<u8>, HashMap<String, u16>)> {
+        let mut pc: u16 = self.opts.start_org.unwrap_or(0);
+        // Pass 1: assign addresses
+        for l in lines_parsed {
+            match l {
+                Line::Org(v) => pc = *v,
+                Line::Equ { label, expr: _ } => {
+                    sym.entry(label.clone()).or_insert(0);
+                }
+                Line::Label(name) => {
+                    define_symbol(&mut sym, name, pc)?;
+                }
+                Line::Instr {
+                    label,
+                    mnem,
+                    operand,
+                } => {
+                    if let Some(lab) = label {
+                        define_symbol(&mut sym, lab, pc)?;
+                    }
+                    let mode = infer_mode(mnem, operand.as_deref(), &sym);
+                    pc = pc.wrapping_add(size_for(mode) as u16);
+                }
+                Line::DataBytes { label, bytes } => {
+                    if let Some(lab) = label {
+                        define_symbol(&mut sym, lab, pc)?;
+                    }
+                    pc = pc.wrapping_add(bytes.len() as u16);
+                }
+                Line::DataWord { label, expr: _ } => {
+                    if let Some(lab) = label {
+                        define_symbol(&mut sym, lab, pc)?;
+                    }
+                    pc = pc.wrapping_add(2);
+                }
+                Line::Block { label, expr } => {
+                    if let Some(lab) = label {
+                        define_symbol(&mut sym, lab, pc)?;
+                    }
+                    let size = if let Ok(val) = expr.parse::<usize>() {
+                        val
+                    } else if let Ok(val) = eval_multi_symbol_expr(expr, &sym) {
+                        val as usize
+                    } else {
+                        0
+                    };
+                    pc = pc.wrapping_add(size as u16);
+                }
+                _ => {}
+            }
+        }
+        // Pass 1.5: resolve equates iteratively
+        for _ in 0..10 {
+            let mut changed = false;
+            for l in lines_parsed {
+                if let Line::Equ { label, expr } = l {
+                    if sym.get(label.as_str()).copied().unwrap_or(0) != 0 {
+                        continue;
+                    }
+                    if let Ok(v) = parse_number(expr) {
+                        sym.insert(label.clone(), v as u16);
+                        changed = true;
+                    } else if let Some(&v) = sym.get(expr.trim()) {
+                        if v != 0 {
+                            sym.insert(label.clone(), v);
+                            changed = true;
+                        }
+                    }
+                }
+            }
+            if !changed {
+                break;
+            }
+        }
+        // Pass 2: encode
+        pc = self.opts.start_org.unwrap_or(0);
+        let mut out: Vec<u8> = Vec::new();
+        let mut fixups: Vec<Fixup> = Vec::new();
+        for (line_idx, l) in lines_parsed.iter().enumerate() {
+            match l {
+                Line::Org(v) => {
+                    pc = *v;
+                    while out.len() < pc as usize {
+                        out.push(0);
+                    }
+                }
+                Line::Label(_) | Line::Equ { .. } | Line::Empty | Line::Comment(_) => {}
+                Line::DataBytes { bytes, .. } => {
+                    ensure_capacity(&mut out, pc as usize);
+                    out.extend_from_slice(bytes);
+                    pc = pc.wrapping_add(bytes.len() as u16);
+                }
+                Line::DataWord { expr, .. } => {
+                    ensure_capacity(&mut out, pc as usize);
+                    if let Ok(value) = resolve_value(expr, &sym) {
+                        out.push((value & 0xFF) as u8);
+                        out.push((value >> 8) as u8);
+                    } else if let Ok(value) = eval_multi_symbol_expr(expr, &sym) {
+                        out.push((value & 0xFF) as u8);
+                        out.push((value >> 8) as u8);
+                    } else if is_symbol(expr.trim()) {
+                        let offset = out.len();
+                        out.push(0);
+                        out.push(0);
+                        fixups.push(Fixup {
+                            offset,
+                            symbol: expr.trim().to_string(),
+                            mode: AddrMode::Abs,
+                            instr_addr: pc,
+                            addend: 0,
+                            mul: 1,
+                            kind: FixupKind::Plain,
+                        });
+                    } else {
+                        bail!("Cannot resolve .word expression: {}", expr);
+                    }
+                    pc = pc.wrapping_add(2);
+                }
+                Line::Block { expr, .. } => {
+                    let size = if let Ok(val) = expr.parse::<usize>() {
+                        val
+                    } else if let Ok(val) = eval_multi_symbol_expr(expr, &sym) {
+                        val as usize
+                    } else {
+                        bail!("Cannot resolve .res expression: {}", expr);
+                    };
+                    ensure_capacity(&mut out, (pc + size as u16) as usize);
+                    for _ in 0..size {
+                        out.push(0);
+                    }
+                    pc = pc.wrapping_add(size as u16);
+                }
+                Line::Instr { mnem, operand, .. } => {
+                    let mode = infer_mode(mnem, operand.as_deref(), &sym);
+                    let out_offset = out.len();
+                    if let Some(op) = lookup(mnem, mode) {
+                        ensure_capacity(&mut out, pc as usize);
+                        out.push(op);
+                        while out.len() < out_offset + size_for(mode) {
+                            out.push(0);
+                        }
+                        if let Some(oprnd) = operand {
+                            build_operand_bytes(
+                                mode,
+                                oprnd,
+                                &sym,
+                                pc,
+                                out_offset,
+                                &mut out,
+                                &mut fixups,
+                                mnem,
+                            )?;
+                        }
+                        pc = pc.wrapping_add(size_for(mode) as u16);
+                    } else {
+                        bail!(
+                            "Opcode not found for {} {:?} at line {}",
+                            mnem,
+                            mode,
+                            line_idx + 1
+                        );
+                    }
+                }
+            }
+        }
+        // Resolve fixups
+        for f in &fixups {
+            let target = sym
+                .get(&f.symbol)
+                .copied()
+                .ok_or_else(|| anyhow::anyhow!("Unresolved symbol {}", f.symbol))?
+                as u16;
+            match f.mode {
+                AddrMode::Abs | AddrMode::AbsX | AddrMode::AbsY | AddrMode::Ind => {
+                    if f.offset + 2 > out.len() {
+                        bail!("Fixup offset out of range for {}", f.symbol);
+                    }
+                    let prod = (target as u32).wrapping_mul(f.mul as u32) as u16;
+                    let adj = prod.wrapping_add(f.addend as u16);
+                    out[f.offset] = (adj & 0xFF) as u8;
+                    out[f.offset + 1] = (adj >> 8) as u8;
+                }
+                AddrMode::Imm
+                | AddrMode::Zp
+                | AddrMode::ZpX
+                | AddrMode::ZpY
+                | AddrMode::IndX
+                | AddrMode::IndY => {
+                    if f.offset >= out.len() {
+                        bail!("Fixup offset out of range for {}", f.symbol);
+                    }
+                    let prod = (target as u32).wrapping_mul(f.mul as u32) as u16;
+                    let adj_full = prod.wrapping_add(f.addend as u16);
+                    let val = match f.kind {
+                        FixupKind::Plain | FixupKind::Low => adj_full & 0xFF,
+                        FixupKind::High => (adj_full >> 8) & 0xFF,
+                    } as u8;
+                    out[f.offset] = val;
+                }
+                AddrMode::Rel => {
+                    let next = f.instr_addr.wrapping_add(2) as i32;
+                    let prod = (target as u32).wrapping_mul(f.mul as u32) as u16;
+                    let adj = prod.wrapping_add(f.addend as u16);
+                    let diff = adj as i32 - next;
+                    if diff < -128 || diff > 127 {
+                        bail!("Branch to {} out of range (diff {})", f.symbol, diff);
+                    }
+                    if f.offset >= out.len() {
+                        bail!("Fixup offset out of range (rel) for {}", f.symbol);
+                    }
+                    out[f.offset] = diff as i8 as u8;
+                }
+                _ => {}
+            }
+        }
+        Ok((out, sym))
+    }
+}
+
+/// Convert a Vec<FlatStmt> into the Vec<Line> format consumed by the assembler.
+///
+/// Byte values that are expression strings are evaluated inline where possible;
+/// unresolvable strings are emitted as forward-reference placeholders.
+pub fn flat_to_lines(flat: &[FlatStmt]) -> Vec<Line> {
+    let mut lines = Vec::with_capacity(flat.len());
+    for stmt in flat {
+        match stmt {
+            FlatStmt::Label(name) => lines.push(Line::Label(name.clone())),
+            FlatStmt::Equate { name, value } => lines.push(Line::Equ {
+                label: name.clone(),
+                expr: value.to_string(),
+            }),
+            FlatStmt::Org(addr) => lines.push(Line::Org(*addr)),
+            FlatStmt::Res { label, count } => lines.push(Line::Block {
+                label: label.clone(),
+                expr: count.to_string(),
+            }),
+            FlatStmt::Bytes { label, values } => {
+                // Evaluate byte expressions inline; unresolvable kept as
+                // raw strings (the old assemble path does not support
+                // DataBytes forward refs well so we keep bytes evaluated).
+                let bytes: Vec<u8> = values.iter().map(|v| eval_byte_expr(v)).collect();
+                lines.push(Line::DataBytes {
+                    label: label.clone(),
+                    bytes,
+                });
+            }
+            FlatStmt::Word { label, expr } => lines.push(Line::DataWord {
+                label: label.clone(),
+                expr: expr.clone(),
+            }),
+            FlatStmt::Instr {
+                label,
+                mnemonic,
+                operand,
+            } => {
+                if let Some(lbl) = label {
+                    lines.push(Line::Label(lbl.clone()));
+                }
+                lines.push(Line::Instr {
+                    label: None,
+                    mnem: mnemonic.clone(),
+                    operand: operand.clone(),
+                });
+            }
+        }
+    }
+    lines
+}
+
+/// Best-effort byte expression evaluator for the flat-to-lines bridge.
+fn eval_byte_expr(s: &str) -> u8 {
+    let s = s.trim();
+    if let Some(hex) = s.strip_prefix('$') {
+        return u8::from_str_radix(hex, 16).unwrap_or(0);
+    }
+    if s.starts_with("0x") || s.starts_with("0X") {
+        return u8::from_str_radix(&s[2..], 16).unwrap_or(0);
+    }
+    if let Ok(v) = s.parse::<u8>() {
+        return v;
+    }
+    // Character literal 'X'
+    if s.starts_with('\'') && s.len() >= 2 {
+        return s.chars().nth(1).unwrap_or('\0') as u8;
+    }
+    0
 }
 
 fn ensure_capacity(v: &mut Vec<u8>, size: usize) {

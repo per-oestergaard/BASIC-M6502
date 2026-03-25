@@ -1,5 +1,5 @@
-/// Code Generator: Convert AST to assembly source
-use crate::ast::*;
+/// Code generator — converts FlatStmt list back to assembly text (for debugging).
+use crate::ast::FlatStmt;
 use anyhow::Result;
 
 pub struct CodeGen {
@@ -8,24 +8,86 @@ pub struct CodeGen {
 
 impl CodeGen {
     pub fn new() -> Self {
-        Self {
-            output: Vec::new(),
-        }
+        Self { output: Vec::new() }
     }
-    
+
+    pub fn generate(&mut self, stmts: &[FlatStmt]) -> Result<String> {
+        for stmt in stmts {
+            match stmt {
+                FlatStmt::Label(name) => self.output.push(format!("{}:", name)),
+                FlatStmt::Equate { name, value } => {
+                    self.output.push(format!("{} = {}", name, value));
+                }
+                FlatStmt::Org(addr) => self.output.push(format!("ORG ${:04X}", addr)),
+                FlatStmt::Res { label, count } => {
+                    let prefix = label
+                        .as_deref()
+                        .map(|l| format!("{}: ", l))
+                        .unwrap_or_default();
+                    self.output.push(format!("{}.res {}", prefix, count));
+                }
+                FlatStmt::Bytes { label, values } => {
+                    let prefix = label
+                        .as_deref()
+                        .map(|l| format!("{}: ", l))
+                        .unwrap_or_default();
+                    self.output
+                        .push(format!("{}.byte {}", prefix, values.join(", ")));
+                }
+                FlatStmt::Word { label, expr } => {
+                    let prefix = label
+                        .as_deref()
+                        .map(|l| format!("{}: ", l))
+                        .unwrap_or_default();
+                    self.output.push(format!("{}.word {}", prefix, expr));
+                }
+                FlatStmt::Instr {
+                    label,
+                    mnemonic,
+                    operand,
+                } => {
+                    let prefix = label
+                        .as_deref()
+                        .map(|l| format!("{}: ", l))
+                        .unwrap_or_default();
+                    let op = operand
+                        .as_deref()
+                        .map(|o| format!(" {}", o))
+                        .unwrap_or_default();
+                    self.output.push(format!("{}{}{}", prefix, mnemonic, op));
+                }
+            }
+        }
+        Ok(self.output.join("\n"))
+    }
+}
+
+pub struct CodeGen {
+    output: Vec<String>,
+}
+
+impl CodeGen {
+    pub fn new() -> Self {
+        Self { output: Vec::new() }
+    }
+
     pub fn generate(&mut self, nodes: Vec<AstNode>) -> Result<String> {
         for node in nodes {
             self.generate_node(node)?;
         }
         Ok(self.output.join("\n"))
     }
-    
+
     fn generate_node(&mut self, node: AstNode) -> Result<()> {
         match node {
             AstNode::Label { name } => {
                 self.output.push(format!("{}:", name));
             }
-            AstNode::Instruction { label, mnemonic, operand } => {
+            AstNode::Instruction {
+                label,
+                mnemonic,
+                operand,
+            } => {
                 let mut line = String::new();
                 if let Some(lbl) = label {
                     line.push_str(&format!("{}: ", lbl));
@@ -46,7 +108,8 @@ impl CodeGen {
                 self.output.push(line);
             }
             AstNode::Equate { name, expr } => {
-                self.output.push(format!("{} = {}", name, self.format_expr(&expr)?));
+                self.output
+                    .push(format!("{} = {}", name, self.format_expr(&expr)?));
             }
             AstNode::MacroCall { .. } => {
                 // Should be expanded already
@@ -66,7 +129,7 @@ impl CodeGen {
         }
         Ok(())
     }
-    
+
     fn format_operand(&self, operand: &Operand) -> Result<String> {
         Ok(match operand {
             Operand::Immediate(expr) => format!("#{}", self.format_expr(expr)?),
@@ -83,18 +146,20 @@ impl CodeGen {
             Operand::Accumulator => "A".to_string(),
         })
     }
-    
+
     fn format_directive(&self, directive: &Directive) -> Result<String> {
         Ok(match directive {
             Directive::Org(expr) => format!("ORG {}", self.format_expr(expr)?),
             Directive::Byte(exprs) => {
-                let vals: Vec<String> = exprs.iter()
+                let vals: Vec<String> = exprs
+                    .iter()
                     .map(|e| self.format_expr(e))
                     .collect::<Result<Vec<_>>>()?;
                 format!(".byte {}", vals.join(", "))
             }
             Directive::Word(exprs) => {
-                let vals: Vec<String> = exprs.iter()
+                let vals: Vec<String> = exprs
+                    .iter()
                     .map(|e| self.format_expr(e))
                     .collect::<Result<Vec<_>>>()?;
                 format!(".word {}", vals.join(", "))
@@ -103,7 +168,7 @@ impl CodeGen {
             Directive::Align(boundary) => format!(".align {}", boundary),
         })
     }
-    
+
     fn format_expr(&self, expr: &Expr) -> Result<String> {
         Ok(match expr {
             Expr::Number(n) => {
