@@ -127,56 +127,73 @@ impl BasicHarness {
         cpu.mem[0x0074] = 0x00;
         cpu.mem[0x0075] = 0x30;
 
-        // ── Shared state: output buffer & input queue ────────────────────────
-        let output: Rc<RefCell<Vec<u8>>> = Rc::new(RefCell::new(Vec::new()));
-        let input: Rc<RefCell<VecDeque<u8>>> = Rc::new(RefCell::new(VecDeque::new()));
+        // TXTTAB ($0068-$0069): prime so INIT's `INC TXTTAB` wraps lo $FF→$00 and
+        // the BNE is not taken, causing INIT to also do `INC TXTTAB+1` ($07→$08).
+        // Result: TXTTAB = $0800 (start of program text, just after the binary).
+        cpu.mem[0x0068] = 0xFF;
+        cpu.mem[0x0069] = 0x07;
 
-        // Queue all program lines (with Apple II high-bit CR = $8D), then "RUN\r"
+        // ── Shared state: output buffer & input line queue ───────────────────
+        let output: Rc<RefCell<Vec<u8>>> = Rc::new(RefCell::new(Vec::new()));
+        // Each entry is one complete input line (bytes with bit7 set, ending with $8D CR).
+        let lines: Rc<RefCell<VecDeque<Vec<u8>>>> = Rc::new(RefCell::new(VecDeque::new()));
+
         {
-            let mut q = input.borrow_mut();
+            let mut q = lines.borrow_mut();
             for line in program.lines() {
-                // uppercase — BASIC is case-sensitive for keywords
-                for b in line.to_ascii_uppercase().bytes() {
-                    q.push_back(b | 0x80);
-                }
-                q.push_back(0x8D); // CR with bit 7 set (Apple II convention)
+                let mut bytes: Vec<u8> = line
+                    .to_ascii_uppercase()
+                    .bytes()
+                    .map(|b| b | 0x80)
+                    .collect();
+                bytes.push(0x8D); // Apple II CR (bit7 set)
+                q.push_back(bytes);
             }
-            for b in b"RUN" {
-                q.push_back(b | 0x80);
-            }
-            q.push_back(0x8D);
+            // Feed "RUN" after the program
+            let mut run_bytes: Vec<u8> = b"RUN".iter().map(|b| b | 0x80).collect();
+            run_bytes.push(0x8D);
+            q.push_back(run_bytes);
         }
 
         // ── I/O hooks via exec traps ─────────────────────────────────────────
-        // $FECD = Apple II COUT: character to print is in A (high bit set or not)
-        let out_buf = output.clone();
-        cpu.hook_exec(0xFECD, move |cpu| {
-            let ch = cpu.a & 0x7F;
-            out_buf.borrow_mut().push(ch);
+        // $FD67 = Apple II GETLN (CQINLN): line-at-a-time input.
+        // INLIN for REALIO=4 calls JSR $FD67, not the character-by-character $FD0C.
+        // Convention: write the line (with high bits set) into BUF ($0200),
+        // set X = character count, set carry, then RTS.
+        let lq = lines.clone();
+        cpu.hook_exec(0xFD67, move |cpu| {
+            let line = lq
+                .borrow_mut()
+                .pop_front()
+                .unwrap_or_else(|| vec![0x8D]); // empty CR if nothing queued
+            let len = line.len().min(255);
+            for (i, &b) in line[..len].iter().enumerate() {
+                cpu.mem[0x0200 + i] = b;
+            }
+            cpu.x = len as u8;
+            cpu.p |= 0x01; // set carry (success)
             cpu.trap_rts();
         });
 
-        // $FD0C = Apple II RDCHAR: return next input char in A; block (busy-loop) if none
-        let in_queue = input.clone();
-        cpu.hook_exec(0xFD0C, move |cpu| {
-            // Return next byte from queue (with bit 7 set, as Apple II firmware does)
-            if let Some(ch) = in_queue.borrow_mut().pop_front() {
-                cpu.a = ch;
-                // Clear zero flag (char available)
-                cpu.p &= !0x02;
-            } else {
-                // No input: return NUL; BASIC will loop calling RDCHAR again
-                cpu.a = 0x80;
-                cpu.p &= !0x02;
-            }
+        // $FECD = Apple II COUT: primary character output path used by OUTDO.
+        let out1 = output.clone();
+        cpu.hook_exec(0xFECD, move |cpu| {
+            out1.borrow_mut().push(cpu.a & 0x7F);
+            cpu.trap_rts();
+        });
+
+        // $FDED = Apple II COUT1: secondary output path (used by some print routines).
+        let out2 = output.clone();
+        cpu.hook_exec(0xFDED, move |cpu| {
+            out2.borrow_mut().push(cpu.a & 0x7F);
             cpu.trap_rts();
         });
 
         // ── Set up entry registers as Apple II firmware would ────────────────
-        // INIT ($1E89) needs:  A=0, X = len(CHRGET template) = INIT - INITAT = $1E89-$1E6C = $1D
-        // Y = terminal width (40)
+        // INIT ($1E89) expects: X = CHRGET template length (INIT−INITAT = $1E89−$1E6C = $1D),
+        // Y = terminal width (40), A = 0.
         cpu.a = 0;
-        cpu.x = 0x1D; // 29 bytes: INITAT..$1E88 copied to CHRGET at $00B1
+        cpu.x = 0x1D; // 29 bytes: copy INITAT template to ZP CHRGET at $00B1
         cpu.y = 40;
         cpu.sp = 0xFF;
         cpu.pc = 0x1E89; // INIT cold-start
@@ -325,7 +342,7 @@ mod tests {
         let max_instructions = 500_000u64;
         let mut instr_count = 0u64;
         let mut halted_at: Option<u16> = None;
-        let mut last_pcs: std::collections::VecDeque<u16> =
+        let _last_pcs: std::collections::VecDeque<u16> =
             std::collections::VecDeque::with_capacity(20);
         let mut sample_pcs: Vec<u16> = Vec::new();
         // Step through instructions (not cycles)

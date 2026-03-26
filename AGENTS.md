@@ -3,9 +3,14 @@ This is instructions for AI. The overall goal is to convert the BASIC interprete
 
 The overall approach I want to take is -
 
-1. Create m6502_grammar.bnf so handle all aspects of m6502.asm
-2. See if the rust crate BNF can be used to generate a parser for the source file, and if so use it to assemble the source file into a binary.
-3. Create a 6502 emulator in Rust and run the assembled binary in it, checking the output against the original BASIC interpreter.
+1. Create m6502_grammar.bnf so handle all aspects of m6502.asm ✅
+2. The `bnf` crate was evaluated but its `ParseTree<'gram>` borrows from both the
+   `Grammar` and the input `&str` through the same lifetime, making it impossible
+   to return an owned value from a function. The crate was removed. The BNF grammar
+   (`m6502_grammar.bnf`) remains as the canonical specification for the hand-written
+   parser in `assembler6502/src/parser.rs`. ✅
+3. Create a 6502 emulator in Rust and run the assembled binary in it, checking the
+   output against the original BASIC interpreter.
 
 ---
 

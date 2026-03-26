@@ -297,6 +297,18 @@ impl Expander {
                 emit_label!();
                 out.push(instr!("STA", format!("({op},X)")));
             }
+            "CMPDY" => {
+                emit_label!();
+                out.push(instr!("CMP", format!("({op}),Y")));
+            }
+            "SBCDY" => {
+                emit_label!();
+                out.push(instr!("SBC", format!("({op}),Y")));
+            }
+            "ADCDY" => {
+                emit_label!();
+                out.push(instr!("ADC", format!("({op}),Y")));
+            }
 
             // ---- 16-bit store pairs ----
             "STWD" => {

@@ -1,40 +1,7 @@
-use anyhow::{Result, anyhow};
-use bnf::Grammar;
+use anyhow::Result;
 use tracing::trace;
 
 use crate::ast::{CondKind, SourceNode};
-
-// ---------------------------------------------------------------------------
-// BNF-grammar validator (kept for potential future use / testing).
-// The actual parse pipeline uses the hand-written `parse()` function below.
-// ---------------------------------------------------------------------------
-
-/// A compiled grammar that can validate whether a statement string is
-/// syntactically legal, without returning a borrow-laden `ParseTree`.
-pub struct AsmGrammar {
-    grammar: Grammar,
-}
-
-impl AsmGrammar {
-    /// Parse and validate the embedded BNF grammar string.
-    pub fn build() -> Result<Self> {
-        let grammar: Grammar = GRAMMAR
-            .parse()
-            .map_err(|e| anyhow!("grammar parse error: {e}"))?;
-        grammar
-            .build_parser()
-            .map_err(|e| anyhow!("build_parser error: {e}"))?;
-        Ok(Self { grammar })
-    }
-
-    /// Returns `true` if the statement matches the embedded grammar.
-    pub fn can_parse(&self, stmt: &str) -> bool {
-        let Ok(parser) = self.grammar.build_parser() else {
-            return false;
-        };
-        parser.parse_input(stmt.trim()).next().is_some()
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Hand-written parser — produces owned SourceNode values.
@@ -143,7 +110,8 @@ fn is_known_mnemonic_or_directive(kw: &str) -> bool {
         | "LDAI" | "LDXI" | "LDYI" | "CMPI" | "CPXI" | "CPYI" | "ADCI"
         | "SBCI" | "ANDI" | "ORAI" | "EORI" | "LDWD" | "LDWX" | "LDXY"
         | "LDWDI" | "LDWXI" | "LDXYI" | "STWD" | "STWX" | "STXY"
-        | "LDADY" | "STADY" | "LDADX" | "STADX" | "PSHWD" | "PULWD"
+        | "LDADY" | "STADY" | "LDADX" | "STADX" | "CMPDY" | "SBCDY" | "ADCDY"
+        | "PSHWD" | "PULWD"
         | "CLR" | "COM" | "SYNCHK" | "JEQ" | "JNE" | "JCS" | "JCC"
         | "JMI" | "JPL" | "JVS" | "JVC" | "ACRLF" | "BCCA" | "BCSA"
         | "BEQA" | "BNEA" | "BMIA" | "BPLA" | "BVCA" | "BVSA" | "INCW"
@@ -537,126 +505,3 @@ fn parse_instr(stmt: &str, label: Option<String>) -> Result<Vec<SourceNode>> {
         operand,
     }])
 }
-
-// ───────────────────────────────────────────────────────────────────────────
-// Pure BNF grammar for m6502 assembler statements.
-//
-// Rules:
-//   • No +, *, ? quantifiers — only pure alternation/concatenation.
-//   • <> is a generic group: <group> matches any depth-balanced <…> content.
-//   • Statements are parsed one at a time — no file-level rule needed.
-//   • Whitespace matching uses <ws> (one or more spaces/tabs).
-// ───────────────────────────────────────────────────────────────────────────
-const GRAMMAR: &str = r##"
-<statement>  ::= <label-stmt> | <bare-stmt>
-<label-stmt> ::= <label> ":" <ws> <bare-stmt> | <label> "::" <ws> <bare-stmt> | <label> ":" | <label> "::"
-<bare-stmt>  ::= <equate> | <conditional> | <macro-def> | <directive> | <instr> | <pseudo-op> | <macro-call>
-
-<label>  ::= <sym>
-
-<equate> ::= <sym> <ws> "==" <ws> <operand> | <sym> <ws> "=" <ws> <operand>
-           | <sym> "==" <operand> | <sym> "=" <operand>
-
-<conditional> ::= <ifn-stmt> | <ife-stmt> | <ifndef-stmt> | <if1-stmt> | <if2-stmt>
-<ife-stmt>    ::= "IFE" <ws> <operand> "," <group>
-<ifn-stmt>    ::= "IFN" <ws> <operand> "," <group>
-<ifndef-stmt> ::= "IFNDEF" <ws> <sym> "," <group>
-<if1-stmt>    ::= "IF1" "," <group>
-<if2-stmt>    ::= "IF2" "," <group>
-
-<macro-def>   ::= "DEFINE" <ws> <sym> "," <group>
-               |  "DEFINE" <ws> <sym> <ws> <params> "," <group>
-<params>      ::= "(" <param-list> ")"
-<param-list>  ::= <sym> | <sym> "," <param-list>
-
-<directive> ::= "ORG" <ws> <operand>
-             |  "BLOCK" <ws> <operand>
-             |  "EXP" <ws> <operand>
-             |  "ADR" "(" <sym> ")"
-             |  "DC" <ws> <string>
-             |  "DCI" <string>
-             |  "DCE" <string>
-             |  "RADIX" <ws> <digits>
-             |  "REPEAT" <ws> <operand> "," <group>
-             |  "IRPC" <ws> <sym> "," <group>
-             |  "TITLE" <ws> <rest>
-             |  "SUBTTL" <ws> <rest>
-             |  "SEARCH" <ws> <rest>
-             |  "PRINTX" <ws> <rest>
-             |  "PAGE"
-             |  "SALL"
-             |  "XLIST"
-             |  "LIST"
-             |  "PURGE" <ws> <rest>
-
-<instr>    ::= <mnem>
-            |  <mnem> <ws> <operand>
-
-<pseudo-op> ::= "LDAI" <ws> <operand> | "LDXI" <ws> <operand> | "LDYI" <ws> <operand>
-             |  "CMPI" <ws> <operand> | "CPXI" <ws> <operand> | "CPYI" <ws> <operand>
-             |  "ADCI" <ws> <operand> | "SBCI" <ws> <operand> | "ANDI" <ws> <operand>
-             |  "ORAI" <ws> <operand> | "EORI" <ws> <operand>
-             |  "JEQ"  <ws> <operand> | "JNE"  <ws> <operand>
-             |  "JCS"  <ws> <operand> | "JCC"  <ws> <operand>
-             |  "JMI"  <ws> <operand> | "JPL"  <ws> <operand>
-             |  "JVS"  <ws> <operand> | "JVC"  <ws> <operand>
-             |  "LDWD" <ws> <operand> | "LDWX" <ws> <operand>
-             |  "LDXY" <ws> <operand> | "LDWDI" <ws> <operand>
-             |  "LDWXI" <ws> <operand>| "LDXYI" <ws> <operand>
-             |  "STWD" <ws> <operand> | "STWX" <ws> <operand>
-             |  "STXY" <ws> <operand>
-             |  "PSHWD" <ws> <operand>| "PULWD" <ws> <operand>
-             |  "CLR"  <ws> <operand> | "COM"  <ws> <operand>
-             |  "SYNCHK" <ws> <operand>
-             |  "INCW" <ws> <operand>
-             |  "BCCA" <ws> <operand> | "BCSA" <ws> <operand>
-             |  "BEQA" <ws> <operand> | "BNEA" <ws> <operand>
-             |  "BMIA" <ws> <operand> | "BPLA" <ws> <operand>
-             |  "BVCA" <ws> <operand> | "BVSA" <ws> <operand>
-             |  "ACRLF" | "SKIP1" | "SKIP2"
-
-<macro-call> ::= <sym> | <sym> <ws> <operand>
-
-<mnem> ::= "ADC" | "AND" | "ASL" | "BCC" | "BCS" | "BEQ" | "BIT" | "BMI" | "BNE"
-        |  "BPL" | "BRK" | "BVC" | "BVS" | "CLC" | "CLD" | "CLI" | "CLV" | "CMP"
-        |  "CPX" | "CPY" | "DEC" | "DEX" | "DEY" | "EOR" | "INC" | "INX" | "INY"
-        |  "JMP" | "JSR" | "LDA" | "LDX" | "LDY" | "LSR" | "NOP" | "ORA" | "PHA"
-        |  "PHP" | "PLA" | "PLP" | "ROL" | "ROR" | "RTI" | "RTS" | "SBC" | "SEC"
-        |  "SED" | "SEI" | "STA" | "STX" | "STY" | "TAX" | "TAY" | "TSX" | "TXA"
-        |  "TXS" | "TYA"
-
-<operand> ::= <group> | <operand-text>
-<operand-text> ::= <operand-char> | <operand-char> <operand-text>
-<operand-char> ::= <letter> | <digit> | "+" | "-" | "*" | "/" | "," | "("
-                |  ")" | "=" | " " | "\t" | "." | "$" | "^" | "O" | "_" | "!"
-                |  "&" | "%"
-
-<group>       ::= "<" <group-content> ">"
-<group-content> ::= <group-inner> | <group-inner> <group-content>
-<group-inner> ::= <group> | <group-char>
-<group-char>  ::= <letter> | <digit> | " " | "\t" | "=" | "+" | "-" | "*" | "/"
-               |  "," | "#" | "(" | ")" | "." | "$" | "^" | "_" | "!" | "&"
-               |  "%" | ":" | "<" | ">"
-
-<string>  ::= <dq> <str-content> <dq>
-<str-content> ::= <str-char> | <str-char> <str-content>
-<str-char>    ::= <letter> | <digit> | " " | "$" | "." | "-" | "+" | "*" | "/" | "(" | ")" | "#" | "_"
-<dq>      ::= "\""
-
-<sym>    ::= <letter> | <letter> <sym-rest>
-<sym-rest> ::= <symch> | <symch> <sym-rest>
-<symch>  ::= <letter> | <digit> | "_" | "." | "$"
-
-<digits> ::= <digit> | <digit> <digits>
-<rest>   ::= <rest-char> | <rest-char> <rest>
-<rest-char> ::= <letter> | <digit> | " " | "\t" | "." | "-" | "+" | "*" | "/" | "(" | ")" | "$" | "_" | "=" | "," | "!" | "&" | ":" | "^"
-
-<ws>     ::= " " | "\t" | " " <ws> | "\t" <ws>
-
-<letter> ::= "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K"
-          |  "L" | "M" | "N" | "O" | "P" | "Q" | "R" | "S" | "T" | "U" | "V"
-          |  "W" | "X" | "Y" | "Z" | "a" | "b" | "c" | "d" | "e" | "f" | "g"
-          |  "h" | "i" | "j" | "k" | "l" | "m" | "n" | "o" | "p" | "q" | "r"
-          |  "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z"
-<digit>  ::= "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
-"##;
