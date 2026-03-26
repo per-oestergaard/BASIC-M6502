@@ -11,6 +11,11 @@ The overall approach I want to take is -
 
 ## Standing Rules for AI Agents
 
+### Terminal
+
+- never redict to /dev/null or similar, always redirect to a file in ./temp/ and read the file instead
+- never use a terminal command that I cannot allow to run automatically
+
 ### Temporary files
 - Always use `./temp/` (workspace-relative) for any scratch, diagnostic, or staging files.
 - Never use `/tmp` or any absolute system temp path.
@@ -60,3 +65,7 @@ __LJ0:
 - Remove unused variables. If they for some reason are needed, prefix them with _ to get rid of the warning.
 - Format Rust code as normal
 - Use rust edition 2024
+- Avoid mutable variables where possible, and prefer functional style.
+- Never use unsafe rust, and never use external C libraries or bindings. The entire codebase should be pure safe Rust.
+- wire code using with tracing for diagnosis, and never use grep/sed/awk/od on source or binary files for diagnosis. Read the files directly or run the code with RUST_LOG=trace (or a targeted filter) and read the trace output instead.
+- cloning is fine when it makes the code simpler and more readable, so don't be afraid to clone when needed. The codebase is small enough that performance is not a concern at this stage, so prioritise readability and simplicity over micro-optimisations.

@@ -1,28 +1,15 @@
 [package]
 name = "assembler6502"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
-anyhow = "1.0.99"
-thiserror = "2.0.16"
-lazy_static = "1"
-regex = "1"
+anyhow = "1.0"
+thiserror = "2.0"
+bnf = "0.6.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [[bin]]
 name = "asm"
 path = "src/bin/asm.rs"
-
-[[bin]]
-name = "dump_all"
-path = "src/bin/dump_all.rs"
-
-[[bin]]
-name = "dump_ifn"
-path = "src/bin/dump_ifn.rs"
-
-[[bin]]
-name = "dump_pre"
-path = "src/bin/dump_pre.rs"

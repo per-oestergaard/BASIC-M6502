@@ -1,122 +1,135 @@
-/// AST types for Stage 1 (parser output) and Stage 2 (expander output).
+/// Owned AST types produced by the parser and consumed by the expander.
 
 // ---------------------------------------------------------------------------
-// Stage 1 — SourceNode
-// Produced by parser.rs. Purely structural: no expression evaluation,
-// no symbol lookups. Nested constructs own their child nodes.
+// CondKind
 // ---------------------------------------------------------------------------
 
+/// Discriminant for IFE / IFN / IFNDEF / IF1 / IF2 conditionals.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CondKind {
+    /// IFE — branch when expression equals zero.
+    IfEq,
+    /// IFN — branch when expression is non-zero.
+    IfNe,
+    /// IFNDEF — branch when symbol is not defined.
+    IfNotDef,
+    /// IF1 — always take (first-pass semantics; we treat as always-true).
+    If1,
+    /// IF2 — never take (second-pass semantics; we treat as always-false).
+    If2,
+}
+
+// ---------------------------------------------------------------------------
+// SourceNode — the parse-time (pre-expansion) AST
+// ---------------------------------------------------------------------------
+
+/// A single logical statement in the source, as produced by [`crate::parser::parse`].
 #[derive(Debug, Clone)]
 pub enum SourceNode {
-    /// A bare label on a line (or with nothing else following).
+    /// A standalone label definition: `LABEL:` or `LABEL::`.
     Label { name: String },
 
-    /// A numeric equate: `SYM = expr` or `SYM == expr`.
+    /// An equate: `NAME = EXPR` or `NAME == EXPR`.
     Equate { name: String, expr: String },
 
-    /// ORG directive: `ORG expr`.
+    /// An ORG directive: `ORG EXPR`.
     Org { expr: String },
 
-    /// IFE / IFN / IFNDEF / IF1 / IF2 conditional block.
+    /// A DEFINE macro definition.
+    MacroDef {
+        name: String,
+        params: Vec<String>,
+        /// Raw body lines (reparsed on each expansion after arg substitution).
+        body: Vec<String>,
+    },
+
+    /// A conditional block (IFE / IFN / IFNDEF / IF1 / IF2).
     Conditional {
         kind: CondKind,
-        /// The raw expression text (unevaluated).
+        /// The expression string (or symbol name for IFNDEF).
         expr: String,
         then_body: Vec<SourceNode>,
         else_body: Vec<SourceNode>,
     },
 
-    /// DEFINE macro definition.
-    /// Body is stored as raw text lines because parameter substitution must
-    /// happen before the body can be parsed.
-    MacroDef {
-        name: String,
-        params: Vec<String>,
-        /// Raw body lines (not yet parsed into SourceNodes).
-        body: Vec<String>,
-    },
-
-    /// A macro invocation (opcode field matched a known or forward-declared macro name).
-    MacroCall {
-        label: Option<String>,
-        name: String,
-        /// Single raw argument string (may be empty).
-        arg: Option<String>,
-    },
-
-    /// REPEAT n,<body> — inline unrolling.
+    /// A REPEAT block.
     Repeat {
         label: Option<String>,
         count_expr: String,
         body: Vec<SourceNode>,
     },
 
-    /// A real 6502 instruction or pseudo-op.
-    Instr {
+    /// A macro invocation or unrecognised mnemonic.
+    MacroCall {
         label: Option<String>,
-        /// Always upper-cased.
-        mnemonic: String,
-        /// Everything after the mnemonic on the same line, trimmed.
-        operand: Option<String>,
+        name: String,
+        arg: Option<String>,
     },
 
-    /// `.byte` directive.
-    Bytes { label: Option<String>, args: Vec<String> },
+    /// Raw byte data (DC / DCI / BYTE / DB / …).
+    Bytes {
+        label: Option<String>,
+        args: Vec<String>,
+    },
 
-    /// `.word` / `ADR` / `XWD` directive.
-    Word { label: Option<String>, args: Vec<String> },
+    /// 16-bit word data (WORD / DW / …).
+    Word {
+        label: Option<String>,
+        args: Vec<String>,
+    },
 
-    /// `.res` / `BLOCK` directive.
-    Res { label: Option<String>, count_expr: String },
+    /// Reserved storage (BLKB / BLKW / BLOCK / RES / …).
+    Res {
+        label: Option<String>,
+        count_expr: String,
+    },
+
+    /// A 6502 instruction or pseudo-op (expanded by the expander).
+    Instr {
+        label: Option<String>,
+        mnemonic: String,
+        operand: Option<String>,
+    },
 }
 
 // ---------------------------------------------------------------------------
-// Stage 2 — FlatStmt
-// Produced by expander.rs. Completely flat: no conditionals, no macro defs,
-// no REPEAT constructs. All pseudo-ops are expanded. Ready for two-pass
-// assembly.
+// FlatStmt — the post-expansion, pre-assembly AST
 // ---------------------------------------------------------------------------
 
+/// A fully expanded statement, ready for the two-pass assembler.
 #[derive(Debug, Clone)]
 pub enum FlatStmt {
+    /// Label definition.
     Label(String),
 
+    /// Compile-time numeric equate (value already evaluated).
+    Equate { name: String, value: i64 },
+
+    /// Origin change.
+    Org(u16),
+
+    /// Byte data emission.
+    Bytes {
+        label: Option<String>,
+        values: Vec<String>,
+    },
+
+    /// 16-bit word emission (one word per statement).
+    Word {
+        label: Option<String>,
+        expr: String,
+    },
+
+    /// Reserved (zero-filled) storage.
+    Res {
+        label: Option<String>,
+        count: u16,
+    },
+
+    /// 6502 instruction (real mnemonic + optional operand string).
     Instr {
         label: Option<String>,
         mnemonic: String,
         operand: Option<String>,
     },
-
-    Org(u16),
-
-    /// Byte values are kept as expression strings so the assembler can resolve
-    /// symbol references in pass 2.
-    Bytes { label: Option<String>, values: Vec<String> },
-
-    /// Word value (2-byte LE). Kept as expression string.
-    Word { label: Option<String>, expr: String },
-
-    /// Reserve `count` bytes.
-    Res { label: Option<String>, count: u16 },
-
-    /// Numeric equate already evaluated.
-    Equate { name: String, value: i64 },
-}
-
-// ---------------------------------------------------------------------------
-// Shared types
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CondKind {
-    /// IFE — assemble body when expression == 0.
-    IfEq,
-    /// IFN — assemble body when expression != 0.
-    IfNe,
-    /// IFNDEF — assemble body when symbol is not defined.
-    IfNotDef,
-    /// IF1 — first pass only (treated as always-true).
-    If1,
-    /// IF2 — second pass only (treated as always-false / skip).
-    If2,
 }
