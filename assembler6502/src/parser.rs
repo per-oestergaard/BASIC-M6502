@@ -227,8 +227,10 @@ fn parse_one(stmt: &str) -> Result<Vec<SourceNode>> {
             return Ok(vec![SourceNode::Org { expr }]);
         }
 
-        // Data directives (DT = "define text", same byte output as DC)
-        "DC" | "DCI" | "DCE" | "DT" => return parse_dc(stmt, None),
+        // Data directives (DT = "define text", same byte output as DC).
+        // DCE is left to macro expansion because this source defines it as a
+        // macro with side effects on Q in the short-error table.
+        "DC" | "DCI" | "DT" => return parse_dc(stmt, None),
         "BYTE" | "DB" | ".BYTE" => return parse_bytes(stmt, None),
         "WORD" | "DW" | ".WORD" => return parse_words(stmt, None),
         "XWD" => return parse_xwd(stmt, None),
@@ -280,12 +282,20 @@ fn parse_one(stmt: &str) -> Result<Vec<SourceNode>> {
             args: split_args(stmt),
         }]);
     }
-    // --- Unknown first token (not a recognised mnemonic) → data byte ---
+    // --- Unknown first token ---
     let top_kw = first_keyword_upper(stmt);
     if !is_known_mnemonic_or_directive(&top_kw) {
-        return Ok(vec![SourceNode::Bytes {
+        let rest = after_first_keyword(stmt).trim();
+        if rest.is_empty() {
+            return Ok(vec![SourceNode::Bytes {
+                label: None,
+                args: split_args(stmt),
+            }]);
+        }
+        return Ok(vec![SourceNode::MacroCall {
             label: None,
-            args: split_args(stmt),
+            name: top_kw,
+            arg: Some(rest.to_string()),
         }]);
     }
     parse_instr(stmt, None)
@@ -328,7 +338,7 @@ fn parse_with_label(body: &str, label: Option<String>) -> Result<Vec<SourceNode>
             nodes.extend(parse_conditional(body, CondKind::If2)?);
             return Ok(nodes);
         }
-        "DC" | "DCI" | "DCE" | "DT" => return parse_dc(body, label),
+        "DC" | "DCI" | "DT" => return parse_dc(body, label),
         "BYTE" | "DB" | ".BYTE" => return parse_bytes(body, label),
         "WORD" | "DW" | ".WORD" => return parse_words(body, label),
         "XWD" => return parse_xwd(body, label),

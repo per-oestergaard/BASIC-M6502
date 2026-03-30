@@ -162,41 +162,133 @@ impl BasicHarness {
         // set X = character count, set carry, then RTS.
         let lq = lines.clone();
         cpu.hook_exec(0xFD67, move |cpu| {
-            let line = lq
-                .borrow_mut()
-                .pop_front()
-                .unwrap_or_else(|| vec![0x8D]); // empty CR if nothing queued
-            let len = line.len().min(255);
-            for (i, &b) in line[..len].iter().enumerate() {
-                cpu.mem[0x0200 + i] = b;
+            if let Some(line) = lq.borrow_mut().pop_front() {
+                eprintln!("DEBUG: GETLN hook called, feeding {} bytes: {:?}", 
+                    line.len(), String::from_utf8_lossy(&line.iter().map(|&b| b & 0x7F).collect::<Vec<_>>()));
+                let len = line.len().min(255);
+                for (i, &b) in line[..len].iter().enumerate() {
+                    cpu.mem[0x0200 + i] = b;
+                }
+                cpu.x = len as u8;
+                cpu.p |= 0x01; // set carry (success)
+            } else {
+                // No more input - this should cause the test to complete or timeout
+                eprintln!("DEBUG: GETLN hook - no more input, halting CPU");
+                cpu.halted = true;
             }
-            cpu.x = len as u8;
-            cpu.p |= 0x01; // set carry (success)
             cpu.trap_rts();
+        });
+
+        // Temporary diagnostic hook: confirm the first input line reaches CRUNCH.
+        let crunch_count = Rc::new(RefCell::new(0usize));
+        let crunch_seen = crunch_count.clone();
+        cpu.hook_exec(0x0B12, move |cpu| {
+            *crunch_seen.borrow_mut() += 1;
+            if *crunch_seen.borrow() <= 3 {
+                let mut bytes = Vec::new();
+                for offset in 0..40u16 {
+                    let byte = cpu.mem[0x0200 + offset as usize];
+                    if byte == 0 {
+                        break;
+                    }
+                    bytes.push(byte);
+                }
+                let text: String = bytes
+                    .into_iter()
+                    .map(|b| {
+                        let c = b & 0x7F;
+                        if c >= 0x20 && c < 0x7F {
+                            c as char
+                        } else if c == 0x0D {
+                            '\r'
+                        } else {
+                            '.'
+                        }
+                    })
+                    .collect();
+                eprintln!("DEBUG: CRUNCH hook #{} TXTPTR=${:04X} BUF={:?}", *crunch_seen.borrow(), ((cpu.mem[0x7B] as u16) << 8) | cpu.mem[0x7A] as u16, text);
+            }
+        });
+
+        // Temporary diagnostic hook: stop on the first BASIC error and print X.
+        cpu.hook_exec(0x09CD, move |cpu| {
+            let error_name = match cpu.x {
+                0 => "NF",
+                2 => "SN",
+                4 => "RG",
+                6 => "OD",
+                8 => "FC",
+                10 => "OV",
+                12 => "OM",
+                14 => "US",
+                16 => "BS",
+                18 => "DD",
+                20 => "/0",
+                22 => "ID",
+                24 => "TM",
+                26 => "LS",
+                30 => "ST",
+                32 => "CN",
+                34 => "UF",
+                _ => "?",
+            };
+            eprintln!(
+                "DEBUG: ERROR hook X={} ({}) A=${:02X} TXTPTR=${:04X}",
+                cpu.x,
+                error_name,
+                cpu.a,
+                ((cpu.mem[0x7B] as u16) << 8) | cpu.mem[0x7A] as u16
+            );
+            cpu.halted = true;
         });
 
         // $FECD = Apple II COUT: primary character output path used by OUTDO.
         let out1 = output.clone();
+        let out1_count = Rc::new(RefCell::new(0usize));
+        let oc1 = out1_count.clone();
         cpu.hook_exec(0xFECD, move |cpu| {
+            *oc1.borrow_mut() += 1;
+            if *oc1.borrow() <= 5 {
+                eprintln!("DEBUG: COUT ($FECD) called, A=${:02X} '{}'", cpu.a, 
+                    if (cpu.a & 0x7F) >= 0x20 && (cpu.a & 0x7F) < 0x7F { (cpu.a & 0x7F) as char } else { '?' });
+            }
+            let ch = cpu.a & 0x7F;
+            if ch >= 0x20 && ch < 0x7F {
+                eprint!("{}", ch as char);
+            } else if ch == 0x0D {
+                eprintln!();
+            }
             out1.borrow_mut().push(cpu.a & 0x7F);
             cpu.trap_rts();
         });
 
         // $FDED = Apple II COUT1: secondary output path (used by some print routines).
         let out2 = output.clone();
+        let out2_count = Rc::new(RefCell::new(0usize));
+        let oc2 = out2_count.clone();
         cpu.hook_exec(0xFDED, move |cpu| {
+            *oc2.borrow_mut() += 1;
+            if *oc2.borrow() <= 10 {
+                eprintln!("DEBUG: COUT1 ($FDED) #{}, A=${:02X} '{}'", *oc2.borrow(), cpu.a, 
+                    if (cpu.a & 0x7F) >= 0x20 && (cpu.a & 0x7F) < 0x7F { (cpu.a & 0x7F) as char } else { '.' });
+            }
+            let ch = cpu.a & 0x7F;
+            if ch >= 0x20 && ch < 0x7F {
+                eprint!("{}", ch as char);
+            } else if ch == 0x0D {
+                eprintln!();
+            }
             out2.borrow_mut().push(cpu.a & 0x7F);
             cpu.trap_rts();
         });
 
-        // ── Set up entry registers as Apple II firmware would ────────────────
-        // INIT ($266C) expects: X = CHRGET template length (INIT−INITAT = $266C−$2648 = $24),
-        // Y = terminal width (40), A = 0.
+        // ── Set up entry registers ────────────────────────────────────────────
+        // Start at $0000 which contains JMP INIT
         cpu.a = 0;
-        cpu.x = 0x24; // 36 bytes: copy INITAT template to ZP CHRGET at $00B1
-        cpu.y = 40;
+        cpu.x = 0;
+        cpu.y = 0;
         cpu.sp = 0xFF;
-        cpu.pc = 0x266C; // INIT cold-start
+        cpu.pc = 0x0000; // START: JMP INIT
 
         // ── Run until "]" (BASIC's post-RUN prompt) appears in output ─────────
         // Apple Basic prints "]\n" after each command including after "RUN" finishes.
