@@ -6,6 +6,19 @@
 use emu6502::BasicHarness;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Once;
+
+static INIT: Once = Once::new();
+
+/// Initialize tracing once for all tests
+fn init_tracing() {
+    INIT.call_once(|| {
+        tracing_subscriber::fmt()
+            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .with_test_writer()
+            .init();
+    });
+}
 
 /// Path to the interpreter binary (once built by the assembler)
 const INTERPRETER_BINARY: &str = "../build/original/basic.bin";
@@ -27,6 +40,8 @@ fn run_basic_program(program_content: &str) -> Result<String, String> {
 
 /// Generic test runner: loads .bas + .expected files, runs and compares.
 fn test_basic_program(program_name: &str) {
+    init_tracing();
+
     let base_path = format!("../tests/basic_programs/{}", program_name);
     let program = fs::read_to_string(format!("{}.bas", base_path))
         .unwrap_or_else(|e| panic!("Failed to read {}.bas: {}", program_name, e));

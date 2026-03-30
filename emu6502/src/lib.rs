@@ -400,6 +400,10 @@ impl Cpu {
         // We iterate by index to satisfy the borrow checker (hooks need &mut Cpu).
         for idx in 0..self.exec_hooks.len() {
             if self.exec_hooks[idx].0 == self.pc {
+                trace!(
+                    target: "emu6502::hooks",
+                    "EXEC HOOK at ${:04X}", self.pc
+                );
                 // Swap out the closure, call it, swap back.
                 let mut hook =
                     std::mem::replace(&mut self.exec_hooks[idx].1, Box::new(|_: &mut Cpu| {}));
@@ -770,6 +774,11 @@ impl Cpu {
             }
             JSR => {
                 let addr = self.abs();
+                trace!(
+                    target: "emu6502::jsr",
+                    "JSR ${:04X} → ${:04X}  [sp=${:02X}]",
+                    self.pc - 3, addr, self.sp
+                );
                 let ret = self.pc - 1;
                 self.push(((ret >> 8) & 0xFF) as u8);
                 self.push((ret & 0xFF) as u8);
@@ -779,6 +788,11 @@ impl Cpu {
                 let lo = self.pop() as u16;
                 let hi = self.pop() as u16;
                 self.pc = (lo | (hi << 8)).wrapping_add(1);
+                trace!(
+                    target: "emu6502::rts",
+                    "RTS → ${:04X}  [sp=${:02X}]",
+                    self.pc, self.sp
+                );
             }
             RTI => {
                 let lo = self.pop() as u16;
@@ -805,8 +819,14 @@ impl Cpu {
 
             // ── BRK / NOP ─────────────────────────────────────────────────────
             BRK => {
+                trace!(
+                    target: "emu6502::brk",
+                    "BRK at PC=${:04X}, trap_brk={}",
+                    instr_pc, self.trap_brk
+                );
                 if self.trap_brk {
                     self.halted = true;
+                    trace!(target: "emu6502::halt", "CPU HALTED at ${:04X}", instr_pc);
                 } else {
                     let pc = self.pc;
                     self.push(((pc >> 8) & 0xFF) as u8);

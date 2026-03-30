@@ -230,7 +230,8 @@ fn parse_one(stmt: &str) -> Result<Vec<SourceNode>> {
         // Data directives (DT = "define text", same byte output as DC)
         "DC" | "DCI" | "DCE" | "DT" => return parse_dc(stmt, None),
         "BYTE" | "DB" | ".BYTE" => return parse_bytes(stmt, None),
-        "WORD" | "DW" | ".WORD" | "XWD" => return parse_words(stmt, None),
+        "WORD" | "DW" | ".WORD" => return parse_words(stmt, None),
+        "XWD" => return parse_xwd(stmt, None),
         "BLKB" | "BLKW" | "BLOCK" | "RES" | ".RES" => return parse_res(stmt, None),
 
         // Assembler control / metadata: silently skip
@@ -301,9 +302,36 @@ fn parse_with_label(body: &str, label: Option<String>) -> Result<Vec<SourceNode>
 
     let kw = first_keyword_upper(body);
     match kw.as_str() {
+        // Conditionals: emit label first, then the conditional
+        "IFE" | "IFEQ" => {
+            let mut nodes: Vec<SourceNode> = label.into_iter().map(|n| SourceNode::Label { name: n }).collect();
+            nodes.extend(parse_conditional(body, CondKind::IfEq)?);
+            return Ok(nodes);
+        }
+        "IFN" | "IFNE" => {
+            let mut nodes: Vec<SourceNode> = label.into_iter().map(|n| SourceNode::Label { name: n }).collect();
+            nodes.extend(parse_conditional(body, CondKind::IfNe)?);
+            return Ok(nodes);
+        }
+        "IFNDEF" => {
+            let mut nodes: Vec<SourceNode> = label.into_iter().map(|n| SourceNode::Label { name: n }).collect();
+            nodes.extend(parse_conditional(body, CondKind::IfNotDef)?);
+            return Ok(nodes);
+        }
+        "IF1" => {
+            let mut nodes: Vec<SourceNode> = label.into_iter().map(|n| SourceNode::Label { name: n }).collect();
+            nodes.extend(parse_conditional(body, CondKind::If1)?);
+            return Ok(nodes);
+        }
+        "IF2" => {
+            let mut nodes: Vec<SourceNode> = label.into_iter().map(|n| SourceNode::Label { name: n }).collect();
+            nodes.extend(parse_conditional(body, CondKind::If2)?);
+            return Ok(nodes);
+        }
         "DC" | "DCI" | "DCE" | "DT" => return parse_dc(body, label),
         "BYTE" | "DB" | ".BYTE" => return parse_bytes(body, label),
-        "WORD" | "DW" | ".WORD" | "XWD" => return parse_words(body, label),
+        "WORD" | "DW" | ".WORD" => return parse_words(body, label),
+        "XWD" => return parse_xwd(body, label),
         "BLKB" | "BLKW" | "BLOCK" | "RES" | ".RES" => return parse_res(body, label),
         "REPEAT" => return parse_repeat(body, label),
         "EQU" | "DEFL" => {
@@ -471,6 +499,31 @@ fn parse_words(stmt: &str, label: Option<String>) -> Result<Vec<SourceNode>> {
     Ok(vec![SourceNode::Word {
         label,
         args: split_args(rest),
+    }])
+}
+
+fn parse_xwd(stmt: &str, label: Option<String>) -> Result<Vec<SourceNode>> {
+    // XWD addr,opcode → emit as 3 bytes: opcode_lo, addr_lo, addr_hi
+    // This creates a 3-byte instruction for skip tricks (BIT abs or similar).
+    let rest = after_first_keyword(stmt);
+    let args = split_args(rest);
+    if args.len() != 2 {
+        return Ok(vec![SourceNode::Bytes {
+            label,
+            args,
+        }]);
+    }
+    // args[0] = address (16-bit), args[1] = opcode (8-bit)
+    // Output: low-byte of opcode, then 16-bit address (little-endian)
+    let addr = &args[0];
+    let opcode = &args[1];
+    Ok(vec![SourceNode::Bytes {
+        label,
+        args: vec![
+            format!("<{opcode}>&^O377"),  // low byte of opcode
+            format!("<{addr}>&^O377"),    // low byte of address
+            format!("<{addr}>/^O400"),    // high byte of address
+        ],
     }])
 }
 

@@ -190,13 +190,13 @@ impl BasicHarness {
         });
 
         // ── Set up entry registers as Apple II firmware would ────────────────
-        // INIT ($1E89) expects: X = CHRGET template length (INIT−INITAT = $1E89−$1E6C = $1D),
+        // INIT ($266C) expects: X = CHRGET template length (INIT−INITAT = $266C−$2648 = $24),
         // Y = terminal width (40), A = 0.
         cpu.a = 0;
-        cpu.x = 0x1D; // 29 bytes: copy INITAT template to ZP CHRGET at $00B1
+        cpu.x = 0x24; // 36 bytes: copy INITAT template to ZP CHRGET at $00B1
         cpu.y = 40;
         cpu.sp = 0xFF;
-        cpu.pc = 0x1E89; // INIT cold-start
+        cpu.pc = 0x266C; // INIT cold-start
 
         // ── Run until "]" (BASIC's post-RUN prompt) appears in output ─────────
         // Apple Basic prints "]\n" after each command including after "RUN" finishes.
@@ -205,7 +205,10 @@ impl BasicHarness {
         let mut last_output_len = 0usize;
 
         loop {
-            if cpu.halted || (cpu.cycles - start_cycles) >= max_cycles {
+            if cpu.halted {
+                break;
+            }
+            if (cpu.cycles - start_cycles) >= max_cycles {
                 break;
             }
             cpu.step();

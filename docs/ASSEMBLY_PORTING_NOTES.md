@@ -1,4 +1,4 @@
-# 6502 Assembly Porting Notes
+ # 6502 Assembly Porting Notes
 
 The source `m6502.asm` uses a macro/conditional dialect (e.g. TITLE, SEARCH, SALL, RADIX, IFN/IFE, IRPC, DEFINE) that resembles the PDP-10 MACRO assembler environment once used for cross-assembling Microsoft BASIC. Modern 6502 assemblers (ca65, vasm, xa, etc.) do not natively accept this syntax.
 

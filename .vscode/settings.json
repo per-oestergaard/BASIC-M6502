@@ -9,6 +9,8 @@
     "awk": true,
     "./target/release/dump_all": true,
     "./target/release/asm": true,
-    "cargo test": true
+    "cargo test": true,
+    "tee": true,
+    "hexdump": true
   }
 }
