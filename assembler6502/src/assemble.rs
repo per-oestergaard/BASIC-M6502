@@ -52,18 +52,23 @@ impl Assembler {
 fn pass1(stmts: &[FlatStmt]) -> HashMap<String, i64> {
     let mut sym: HashMap<String, i64> = HashMap::new();
     let mut pc: u16 = 0;
+    let mut radix: u32 = 10;
 
     for stmt in stmts {
         match stmt {
             FlatStmt::Org(addr) => {
                 pc = *addr;
             }
+            FlatStmt::Radix(base) => {
+                radix = *base;
+            }
             FlatStmt::Label(name) => {
                 sym.insert(name.clone(), pc as i64);
                 trace!(target: "assembler6502::assemble", label = %name, pc, "label");
             }
-            FlatStmt::Equate { name, value } => {
-                sym.insert(name.clone(), *value);
+            FlatStmt::Equate { name, expr } => {
+                let value = eval_expr(expr, pc, &sym, radix);
+                sym.insert(name.clone(), value);
             }
             FlatStmt::Bytes { label, values } => {
                 if let Some(lbl) = label {
@@ -91,7 +96,7 @@ fn pass1(stmts: &[FlatStmt]) -> HashMap<String, i64> {
                 if let Some(lbl) = label {
                     sym.insert(lbl.clone(), pc as i64);
                 }
-                let size = instr_size(mnemonic, operand.as_deref(), pc, &sym);
+                let size = instr_size(mnemonic, operand.as_deref(), pc, &sym, radix);
                 pc = pc.wrapping_add(size as u16);
             }
         }
@@ -108,6 +113,7 @@ fn pass2(stmts: &[FlatStmt], sym: &HashMap<String, i64>) -> (Vec<u8>, u16) {
     // Write into the full 64 KB address space, then trim.
     let mut mem = vec![0u8; 0x10000];
     let mut pc: u16 = 0;
+    let mut radix: u32 = 10;
     let mut min_written: u16 = 0xFFFF;
     let mut max_written: u16 = 0;
     let mut anything_written = false;
@@ -131,13 +137,16 @@ fn pass2(stmts: &[FlatStmt], sym: &HashMap<String, i64>) -> (Vec<u8>, u16) {
             FlatStmt::Org(addr) => {
                 pc = *addr;
             }
+            FlatStmt::Radix(base) => {
+                radix = *base;
+            }
             FlatStmt::Label(_) | FlatStmt::Equate { .. } => {}
             FlatStmt::Res { count, .. } => {
                 pc = pc.wrapping_add(*count);
             }
             FlatStmt::Bytes { values, .. } => {
                 for v in values {
-                    let b = eval_byte(v, pc, sym);
+                    let b = eval_byte(v, pc, sym, radix);
                     write(&mut mem, pc, b);
                     mark(
                         pc,
@@ -149,7 +158,7 @@ fn pass2(stmts: &[FlatStmt], sym: &HashMap<String, i64>) -> (Vec<u8>, u16) {
                 }
             }
             FlatStmt::Word { expr, .. } => {
-                let val = eval_expr(expr, pc, sym) as u16;
+                let val = eval_expr(expr, pc, sym, radix) as u16;
                 write(&mut mem, pc, (val & 0xFF) as u8);
                 mark(
                     pc,
@@ -170,7 +179,7 @@ fn pass2(stmts: &[FlatStmt], sym: &HashMap<String, i64>) -> (Vec<u8>, u16) {
                 mnemonic, operand, ..
             } => {
                 let op = operand.as_deref();
-                let (mode, val) = parse_operand(op, pc, sym, mnemonic);
+                let (mode, val) = parse_operand(op, pc, sym, mnemonic, radix);
 
                 let opcode = resolve_opcode(mnemonic, mode);
                 if let Some(oc) = opcode {
@@ -229,7 +238,7 @@ fn pass2(stmts: &[FlatStmt], sym: &HashMap<String, i64>) -> (Vec<u8>, u16) {
                 } else {
                     // Unknown opcode — advance by estimated size so subsequent
                     // labels stay in sync with pass-1 addresses.
-                    let size = instr_size(mnemonic, op, pc, sym) as u16;
+                    let size = instr_size(mnemonic, op, pc, sym, radix) as u16;
                     trace!(
                         target: "assembler6502::assemble",
                         pc,
@@ -272,8 +281,8 @@ fn resolve_opcode(mnemonic: &str, mode: AddrMode) -> Option<u8> {
 // Instruction size estimation (used by both passes)
 // ---------------------------------------------------------------------------
 
-fn instr_size(mnemonic: &str, operand: Option<&str>, pc: u16, sym: &HashMap<String, i64>) -> usize {
-    let (mode, _) = parse_operand(operand, pc, sym, mnemonic);
+fn instr_size(mnemonic: &str, operand: Option<&str>, pc: u16, sym: &HashMap<String, i64>, radix: u32) -> usize {
+    let (mode, _) = parse_operand(operand, pc, sym, mnemonic, radix);
     crate::opcode::size_for(mode)
 }
 
@@ -286,6 +295,7 @@ fn parse_operand(
     pc: u16,
     sym: &HashMap<String, i64>,
     mnemonic: &str,
+    radix: u32,
 ) -> (AddrMode, i64) {
     let s = match operand {
         None => return (Imp, 0),
@@ -307,7 +317,7 @@ fn parse_operand(
 
     // Immediate: #expr
     if let Some(rest) = s.strip_prefix('#') {
-        let val = eval_expr(rest, pc, sym);
+        let val = eval_expr(rest, pc, sym, radix);
         return (Imm, val);
     }
 
@@ -316,7 +326,7 @@ fn parse_operand(
         let inner = &s[1..];
         let upper = inner.to_ascii_uppercase();
         if let Some(xi) = upper.find(",X)") {
-            let val = eval_expr(&inner[..xi], pc, sym);
+            let val = eval_expr(&inner[..xi], pc, sym, radix);
             return (IndX, val);
         }
         // Indirect indexed: (expr),Y
@@ -326,7 +336,7 @@ fn parse_operand(
                 .trim()
                 .trim_end_matches(',')
                 .to_ascii_uppercase();
-            let val = eval_expr(addr_str, pc, sym);
+            let val = eval_expr(addr_str, pc, sym, radix);
             if after == ",Y" || after == "Y" {
                 return (IndY, val);
             }
@@ -342,7 +352,7 @@ fn parse_operand(
             .trim()
             .trim_end_matches(',')
             .to_ascii_uppercase();
-        let val = eval_expr(addr_str, pc, sym);
+        let val = eval_expr(addr_str, pc, sym, radix);
         if idx == "X" {
             let m = mnemonic.to_ascii_uppercase();
             if val >= 0 && val < 256 && crate::opcode::lookup(&m, ZpX).is_some() {
@@ -360,7 +370,7 @@ fn parse_operand(
     }
 
     // Plain address: relative (branches), ZP, or absolute
-    let val = eval_expr(s, pc, sym);
+    let val = eval_expr(s, pc, sym, radix);
     let m = mnemonic.to_ascii_uppercase();
     if matches!(
         m.as_str(),
@@ -404,8 +414,14 @@ fn find_last_index_comma(s: &str) -> Option<usize> {
 // Byte evaluator
 // ---------------------------------------------------------------------------
 
-fn eval_byte(expr: &str, pc: u16, sym: &HashMap<String, i64>) -> u8 {
-    (eval_expr(expr.trim(), pc, sym) & 0xFF) as u8
+fn eval_byte(expr: &str, pc: u16, sym: &HashMap<String, i64>, radix: u32) -> u8 {
+    (eval_expr(expr.trim(), pc, sym, radix) & 0xFF) as u8
+}
+
+fn parse_bare_number(digits: &str, radix: u32) -> i64 {
+    i64::from_str_radix(digits, radix)
+        .or_else(|_| digits.parse())
+        .unwrap_or(0)
 }
 
 // ---------------------------------------------------------------------------
@@ -414,33 +430,33 @@ fn eval_byte(expr: &str, pc: u16, sym: &HashMap<String, i64>) -> u8 {
 //          +  -  *  /  &(AND)  !(OR)  <expr>(group)  <expr(lowbyte)  >expr(hibyte)
 // ---------------------------------------------------------------------------
 
-pub fn eval_expr(expr: &str, pc: u16, sym: &HashMap<String, i64>) -> i64 {
+pub fn eval_expr(expr: &str, pc: u16, sym: &HashMap<String, i64>, radix: u32) -> i64 {
     let expr = expr.trim();
     if expr.is_empty() {
         return 0;
     }
-    let (val, _) = expr_add(expr, pc, sym);
+    let (val, _) = expr_add(expr, pc, sym, radix);
     val
 }
 
-fn expr_add<'a>(s: &'a str, pc: u16, sym: &HashMap<String, i64>) -> (i64, &'a str) {
-    let (mut val, rest) = expr_mul(s, pc, sym);
+fn expr_add<'a>(s: &'a str, pc: u16, sym: &HashMap<String, i64>, radix: u32) -> (i64, &'a str) {
+    let (mut val, rest) = expr_mul(s, pc, sym, radix);
     let mut rest = rest.trim_start();
     loop {
         if rest.starts_with('+') && !rest.starts_with("++") {
-            let (r, rem) = expr_mul(rest[1..].trim_start(), pc, sym);
+            let (r, rem) = expr_mul(rest[1..].trim_start(), pc, sym, radix);
             val += r;
             rest = rem.trim_start();
         } else if rest.starts_with('-') {
-            let (r, rem) = expr_mul(rest[1..].trim_start(), pc, sym);
+            let (r, rem) = expr_mul(rest[1..].trim_start(), pc, sym, radix);
             val -= r;
             rest = rem.trim_start();
         } else if rest.starts_with('!') {
-            let (r, rem) = expr_mul(rest[1..].trim_start(), pc, sym);
+            let (r, rem) = expr_mul(rest[1..].trim_start(), pc, sym, radix);
             val |= r;
             rest = rem.trim_start();
         } else if rest.starts_with('&') {
-            let (r, rem) = expr_mul(rest[1..].trim_start(), pc, sym);
+            let (r, rem) = expr_mul(rest[1..].trim_start(), pc, sym, radix);
             val &= r;
             rest = rem.trim_start();
         } else {
@@ -450,16 +466,16 @@ fn expr_add<'a>(s: &'a str, pc: u16, sym: &HashMap<String, i64>) -> (i64, &'a st
     (val, rest)
 }
 
-fn expr_mul<'a>(s: &'a str, pc: u16, sym: &HashMap<String, i64>) -> (i64, &'a str) {
-    let (mut val, rest) = expr_unary(s, pc, sym);
+fn expr_mul<'a>(s: &'a str, pc: u16, sym: &HashMap<String, i64>, radix: u32) -> (i64, &'a str) {
+    let (mut val, rest) = expr_unary(s, pc, sym, radix);
     let mut rest = rest.trim_start();
     loop {
         if rest.starts_with('*') {
-            let (r, rem) = expr_unary(rest[1..].trim_start(), pc, sym);
+            let (r, rem) = expr_unary(rest[1..].trim_start(), pc, sym, radix);
             val *= r;
             rest = rem.trim_start();
         } else if rest.starts_with('/') {
-            let (r, rem) = expr_unary(rest[1..].trim_start(), pc, sym);
+            let (r, rem) = expr_unary(rest[1..].trim_start(), pc, sym, radix);
             val = if r != 0 { val / r } else { 0 };
             rest = rem.trim_start();
         } else {
@@ -469,24 +485,24 @@ fn expr_mul<'a>(s: &'a str, pc: u16, sym: &HashMap<String, i64>) -> (i64, &'a st
     (val, rest)
 }
 
-fn expr_unary<'a>(s: &'a str, pc: u16, sym: &HashMap<String, i64>) -> (i64, &'a str) {
+fn expr_unary<'a>(s: &'a str, pc: u16, sym: &HashMap<String, i64>, radix: u32) -> (i64, &'a str) {
     let s = s.trim_start();
     if s.starts_with('-') {
-        let (v, r) = expr_atom(&s[1..].trim_start(), pc, sym);
+        let (v, r) = expr_atom(&s[1..].trim_start(), pc, sym, radix);
         return (-v, r);
     }
     if s.starts_with('+') {
-        return expr_atom(&s[1..].trim_start(), pc, sym);
+        return expr_atom(&s[1..].trim_start(), pc, sym, radix);
     }
     // High-byte prefix: >expr → (eval(expr) >> 8) & 0xFF
     if s.starts_with('>') && !s[1..].trim_start().starts_with('<') {
-        let (v, r) = expr_atom(&s[1..].trim_start(), pc, sym);
+        let (v, r) = expr_atom(&s[1..].trim_start(), pc, sym, radix);
         return ((v >> 8) & 0xFF, r);
     }
-    expr_atom(s, pc, sym)
+    expr_atom(s, pc, sym, radix)
 }
 
-fn expr_atom<'a>(s: &'a str, pc: u16, sym: &HashMap<String, i64>) -> (i64, &'a str) {
+fn expr_atom<'a>(s: &'a str, pc: u16, sym: &HashMap<String, i64>, radix: u32) -> (i64, &'a str) {
     let s = s.trim_start();
     if s.is_empty() {
         return (0, s);
@@ -495,7 +511,7 @@ fn expr_atom<'a>(s: &'a str, pc: u16, sym: &HashMap<String, i64>) -> (i64, &'a s
     // Angle-bracket group: <expr> or <expr (unbalanced = low-byte)
     if s.starts_with('<') {
         let body = collect_angle(s);
-        let val = eval_expr(&body, pc, sym);
+        let val = eval_expr(&body, pc, sym, radix);
         let consumed = (body.len() + 2).min(s.len());
         // Check if it was actually balanced (has matching >)
         let balanced = s[1..].contains('>');
@@ -507,7 +523,7 @@ fn expr_atom<'a>(s: &'a str, pc: u16, sym: &HashMap<String, i64>) -> (i64, &'a s
     if s.starts_with('(') {
         if let Some(ci) = find_close_paren(s) {
             let inner = &s[1..ci];
-            let val = eval_expr(inner, pc, sym);
+            let val = eval_expr(inner, pc, sym, radix);
             return (val, &s[ci + 1..]);
         }
     }
@@ -532,6 +548,16 @@ fn expr_atom<'a>(s: &'a str, pc: u16, sym: &HashMap<String, i64>) -> (i64, &'a s
         return (val, &rest[end..]);
     }
 
+    // Decimal: ^D or ^d
+    if s.starts_with("^D") || s.starts_with("^d") {
+        let rest = s[2..].trim_start();
+        let end = rest
+            .find(|c: char| !c.is_ascii_digit())
+            .unwrap_or(rest.len());
+        let val: i64 = rest[..end].parse().unwrap_or(0);
+        return (val, &rest[end..]);
+    }
+
     // Hex: $xx
     if s.starts_with('$') {
         let rest = &s[1..];
@@ -542,10 +568,10 @@ fn expr_atom<'a>(s: &'a str, pc: u16, sym: &HashMap<String, i64>) -> (i64, &'a s
         return (val, &rest[end..]);
     }
 
-    // Decimal
+    // Default radix follows the current RADIX directive.
     if s.starts_with(|c: char| c.is_ascii_digit()) {
         let end = s.find(|c: char| !c.is_ascii_digit()).unwrap_or(s.len());
-        let val: i64 = s[..end].parse().unwrap_or(0);
+        let val = parse_bare_number(&s[..end], radix);
         return (val, &s[end..]);
     }
 

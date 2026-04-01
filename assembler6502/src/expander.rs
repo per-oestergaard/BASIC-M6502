@@ -25,6 +25,32 @@ struct MacroDef {
     body: Vec<String>,
 }
 
+fn strip_grouping_angles(expr: &str) -> &str {
+    let expr = expr.trim();
+    if !expr.starts_with('<') || !expr.ends_with('>') {
+        return expr;
+    }
+
+    let mut depth = 0usize;
+    for (index, ch) in expr.char_indices() {
+        match ch {
+            '<' => depth += 1,
+            '>' => {
+                depth -= 1;
+                if depth == 0 {
+                    if index == expr.len() - 1 {
+                        return &expr[1..index];
+                    }
+                    return expr;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    expr
+}
+
 // ---------------------------------------------------------------------------
 // Expander state
 // ---------------------------------------------------------------------------
@@ -36,6 +62,8 @@ pub struct Expander {
     macros: HashMap<String, MacroDef>,
     /// Counter for generating unique long-jump labels.
     lj_counter: usize,
+    /// Current default numeric base from RADIX directives.
+    radix: u32,
 }
 
 impl Expander {
@@ -51,6 +79,7 @@ impl Expander {
             symbols: syms,
             macros: HashMap::new(),
             lj_counter: 0,
+            radix: 10,
         }
     }
 
@@ -71,16 +100,25 @@ impl Expander {
 
             // ------------------------------------------------------------------
             SourceNode::Equate { name, expr } => {
-                let val = self.eval_expr_str(&expr);
-                trace!(target: "assembler6502::expander", sym = %name, val, "equate");
-                self.symbols.insert(name.clone(), val);
-                out.push(FlatStmt::Equate { name, value: val });
+                if let Some(val) = try_eval_expr(expr.trim(), &self.symbols, self.radix) {
+                    trace!(target: "assembler6502::expander", sym = %name, val, "equate");
+                    self.symbols.insert(name.clone(), val);
+                } else {
+                    trace!(target: "assembler6502::expander", sym = %name, expr = %expr, "deferred equate");
+                }
+                out.push(FlatStmt::Equate { name, expr });
             }
 
             // ------------------------------------------------------------------
             SourceNode::Org { expr } => {
                 let addr = self.eval_expr_str(&expr) as u16;
                 out.push(FlatStmt::Org(addr));
+            }
+
+            // ------------------------------------------------------------------
+            SourceNode::Radix { base } => {
+                self.radix = base;
+                out.push(FlatStmt::Radix(base));
             }
 
             // ------------------------------------------------------------------
@@ -138,10 +176,42 @@ impl Expander {
 
             // ------------------------------------------------------------------
             SourceNode::MacroCall { label, name, arg } => {
-                if let Some(lbl) = label {
-                    out.push(FlatStmt::Label(lbl));
+                let upper = name.to_ascii_uppercase();
+                if upper == "DCI" {
+                    let current_q = self.symbols.get("Q").copied().unwrap_or(0);
+                    let next_q = current_q + 1;
+                    self.symbols.insert("Q".to_string(), next_q);
+                    out.push(FlatStmt::Equate {
+                        name: "Q".to_string(),
+                        expr: "Q+1".to_string(),
+                    });
+
+                    let text = arg.unwrap_or_default().trim().to_string();
+                    if text.starts_with('"') && text.ends_with('"') && text.len() >= 2 {
+                        let content = &text[1..text.len() - 1];
+                        let mut values = Vec::new();
+                        for (index, byte) in content.bytes().enumerate() {
+                            let encoded = if index + 1 == content.len() {
+                                byte | 0x80
+                            } else {
+                                byte
+                            };
+                            values.push(format!("${encoded:02X}"));
+                        }
+                        out.push(FlatStmt::Bytes { label, values });
+                    } else {
+                        out.push(FlatStmt::Bytes {
+                            label,
+                            values: vec![text],
+                        });
+                    }
+                    return Ok(());
                 }
-                if let Some(def) = self.macros.get(&name.to_ascii_uppercase()).cloned() {
+
+                if let Some(ref lbl) = label {
+                    out.push(FlatStmt::Label(lbl.clone()));
+                }
+                if let Some(def) = self.macros.get(&upper).cloned() {
                     let arg_str = arg.unwrap_or_default();
                     let expanded_lines = substitute_macro_body(&def.params, &def.body, &arg_str);
                     let sub_nodes = parse(&expanded_lines.join("\n"))?;
@@ -149,13 +219,7 @@ impl Expander {
                         self.expand_node(n, out)?;
                     }
                 } else {
-                    // Unknown macro call — treat as an instruction and let the
-                    // assembler figure it out (or error).
-                    out.push(FlatStmt::Instr {
-                        label: None,
-                        mnemonic: name,
-                        operand: arg,
-                    });
+                    self.expand_instr(label, &name, arg.as_deref(), out)?;
                 }
             }
 
@@ -348,16 +412,19 @@ impl Expander {
             // LDWDI <expr>  ->  LDA #<expr   LDY #>expr
             "LDWDI" => {
                 emit_label!();
+                let op = strip_grouping_angles(&op);
                 out.push(instr!("LDA", format!("#<{}", op)));
                 out.push(instr!("LDY", format!("#>{}", op)));
             }
             "LDWXI" => {
                 emit_label!();
+                let op = strip_grouping_angles(&op);
                 out.push(instr!("LDA", format!("#<{}", op)));
                 out.push(instr!("LDX", format!("#>{}", op)));
             }
             "LDXYI" => {
                 emit_label!();
+                let op = strip_grouping_angles(&op);
                 out.push(instr!("LDX", format!("#<{}", op)));
                 out.push(instr!("LDY", format!("#>{}", op)));
             }
@@ -365,17 +432,17 @@ impl Expander {
             // ---- Push/pull 16-bit ----
             "PSHWD" => {
                 emit_label!();
-                out.push(instr!("LDA", op));
-                out.push(instr!("PHA"));
                 out.push(instr!("LDA", format!("{}+1", op)));
+                out.push(instr!("PHA"));
+                out.push(instr!("LDA", op));
                 out.push(instr!("PHA"));
             }
             "PULWD" => {
                 emit_label!();
                 out.push(instr!("PLA"));
-                out.push(instr!("STA", format!("{}+1", op)));
-                out.push(instr!("PLA"));
                 out.push(instr!("STA", op));
+                out.push(instr!("PLA"));
+                out.push(instr!("STA", format!("{}+1", op)));
             }
 
             // ---- CLR / COM ----
@@ -396,6 +463,12 @@ impl Expander {
                 emit_label!();
                 out.push(instr!("LDA", format!("#{}", op)));
                 out.push(instr!("JSR", "SYNCHR"));
+            }
+
+            // ---- JMPD ptr -> JMP (ptr) ----
+            "JMPD" => {
+                emit_label!();
+                out.push(instr!("JMP", format!("({})", op)));
             }
 
             // ---- ACRLF -> .byte $0D, $0A ----
@@ -478,7 +551,7 @@ impl Expander {
     /// Evaluate a MACRO-10 expression string to an i64.
     /// Unknown symbols return 0 (safe for conditionals where 0 == false).
     pub fn eval_expr_str(&self, expr: &str) -> i64 {
-        eval_expr(expr.trim(), &self.symbols)
+        eval_expr(expr.trim(), &self.symbols, self.radix)
     }
 }
 
@@ -486,36 +559,164 @@ impl Expander {
 // Expression evaluator (free function, recursive)
 // ---------------------------------------------------------------------------
 
-fn eval_expr(expr: &str, syms: &HashMap<String, i64>) -> i64 {
+fn eval_expr(expr: &str, syms: &HashMap<String, i64>, radix: u32) -> i64 {
     let expr = expr.trim();
     if expr.is_empty() {
         return 0;
     }
 
     // Try to evaluate using a simple recursive-descent parser.
-    let (val, _) = eval_add(expr, syms);
+    let (val, _) = eval_add(expr, syms, radix);
     val
 }
 
-fn eval_add<'a>(s: &'a str, syms: &HashMap<String, i64>) -> (i64, &'a str) {
-    let (mut val, rest) = eval_mul(s, syms);
+fn try_eval_expr(expr: &str, syms: &HashMap<String, i64>, radix: u32) -> Option<i64> {
+    let expr = expr.trim();
+    if expr.is_empty() {
+        return Some(0);
+    }
+
+    let (val, rest) = try_eval_add(expr, syms, radix)?;
+    if rest.trim().is_empty() {
+        Some(val)
+    } else {
+        None
+    }
+}
+
+fn try_eval_add<'a>(s: &'a str, syms: &HashMap<String, i64>, radix: u32) -> Option<(i64, &'a str)> {
+    let (mut val, rest) = try_eval_mul(s, syms, radix)?;
     let mut rest = rest.trim_start();
     loop {
         if rest.starts_with('+') {
-            let (rval, r) = eval_mul(rest[1..].trim_start(), syms);
+            let (rval, r) = try_eval_mul(rest[1..].trim_start(), syms, radix)?;
             val += rval;
             rest = r.trim_start();
         } else if rest.starts_with('-') {
-            let (rval, r) = eval_mul(rest[1..].trim_start(), syms);
+            let (rval, r) = try_eval_mul(rest[1..].trim_start(), syms, radix)?;
+            val -= rval;
+            rest = r.trim_start();
+        } else if rest.starts_with('!') {
+            let (rval, r) = try_eval_mul(rest[1..].trim_start(), syms, radix)?;
+            val |= rval;
+            rest = r.trim_start();
+        } else if rest.starts_with('&') {
+            let (rval, r) = try_eval_mul(rest[1..].trim_start(), syms, radix)?;
+            val &= rval;
+            rest = r.trim_start();
+        } else {
+            break;
+        }
+    }
+    Some((val, rest))
+}
+
+fn try_eval_mul<'a>(s: &'a str, syms: &HashMap<String, i64>, radix: u32) -> Option<(i64, &'a str)> {
+    let (mut val, rest) = try_eval_unary(s, syms, radix)?;
+    let mut rest = rest.trim_start();
+    loop {
+        if rest.starts_with('*') {
+            let (rval, r) = try_eval_unary(rest[1..].trim_start(), syms, radix)?;
+            val *= rval;
+            rest = r.trim_start();
+        } else if rest.starts_with('/') {
+            let (rval, r) = try_eval_unary(rest[1..].trim_start(), syms, radix)?;
+            val = if rval != 0 { val / rval } else { 0 };
+            rest = r.trim_start();
+        } else {
+            break;
+        }
+    }
+    Some((val, rest))
+}
+
+fn try_eval_unary<'a>(s: &'a str, syms: &HashMap<String, i64>, radix: u32) -> Option<(i64, &'a str)> {
+    let s = s.trim_start();
+    if s.starts_with('-') {
+        let (v, r) = try_eval_atom(s[1..].trim_start(), syms, radix)?;
+        return Some((-v, r));
+    }
+    if s.starts_with('+') {
+        return try_eval_atom(s[1..].trim_start(), syms, radix);
+    }
+    try_eval_atom(s, syms, radix)
+}
+
+fn try_eval_atom<'a>(s: &'a str, syms: &HashMap<String, i64>, radix: u32) -> Option<(i64, &'a str)> {
+    let s = s.trim_start();
+    if s.starts_with('<') {
+        let body = collect_angle_body_str(&s[1..]);
+        let val = try_eval_expr(&body, syms, radix)?;
+        let consumed = body.len() + 2;
+        return Some((val, &s[consumed.min(s.len())..]));
+    }
+    if s.starts_with("^O") || s.starts_with("^o") {
+        let rest = &s[2..].trim_start();
+        let end = rest
+            .find(|c: char| !c.is_ascii_digit())
+            .unwrap_or(rest.len());
+        let digits = &rest[..end];
+        let val = i64::from_str_radix(digits, 8).ok()?;
+        return Some((val, &rest[end..]));
+    }
+    if s.starts_with("^D") || s.starts_with("^d") {
+        let rest = &s[2..].trim_start();
+        let end = rest
+            .find(|c: char| !c.is_ascii_digit())
+            .unwrap_or(rest.len());
+        let digits = &rest[..end];
+        let val: i64 = digits.parse().ok()?;
+        return Some((val, &rest[end..]));
+    }
+    if s.starts_with('$') {
+        let rest = &s[1..];
+        let end = rest
+            .find(|c: char| !c.is_ascii_hexdigit())
+            .unwrap_or(rest.len());
+        let digits = &rest[..end];
+        let val = i64::from_str_radix(digits, 16).ok()?;
+        return Some((val, &rest[end..]));
+    }
+    if s.starts_with(|c: char| c.is_ascii_digit()) {
+        let end = s.find(|c: char| !c.is_ascii_digit()).unwrap_or(s.len());
+        let val = parse_bare_number(&s[..end], radix)?;
+        return Some((val, &s[end..]));
+    }
+    if s.starts_with('\'') && s.len() >= 3 {
+        let ch = s.chars().nth(1)? as i64;
+        let after = s[3..].trim_start();
+        return Some((ch, after));
+    }
+    if s.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_' || c == '.') {
+        let end = s
+            .find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '$')
+            .unwrap_or(s.len());
+        let sym = s[..end].to_ascii_uppercase();
+        let val = syms.get(&sym).copied()?;
+        return Some((val, &s[end..]));
+    }
+    None
+}
+
+fn eval_add<'a>(s: &'a str, syms: &HashMap<String, i64>, radix: u32) -> (i64, &'a str) {
+    let (mut val, rest) = eval_mul(s, syms, radix);
+    let mut rest = rest.trim_start();
+    loop {
+        if rest.starts_with('+') {
+            let (rval, r) = eval_mul(rest[1..].trim_start(), syms, radix);
+            val += rval;
+            rest = r.trim_start();
+        } else if rest.starts_with('-') {
+            let (rval, r) = eval_mul(rest[1..].trim_start(), syms, radix);
             val -= rval;
             rest = r.trim_start();
         } else if rest.starts_with('!') {
             // Bitwise OR
-            let (rval, r) = eval_mul(rest[1..].trim_start(), syms);
+            let (rval, r) = eval_mul(rest[1..].trim_start(), syms, radix);
             val |= rval;
             rest = r.trim_start();
         } else if rest.starts_with('&') {
-            let (rval, r) = eval_mul(rest[1..].trim_start(), syms);
+            let (rval, r) = eval_mul(rest[1..].trim_start(), syms, radix);
             val &= rval;
             rest = r.trim_start();
         } else {
@@ -525,16 +726,16 @@ fn eval_add<'a>(s: &'a str, syms: &HashMap<String, i64>) -> (i64, &'a str) {
     (val, rest)
 }
 
-fn eval_mul<'a>(s: &'a str, syms: &HashMap<String, i64>) -> (i64, &'a str) {
-    let (mut val, rest) = eval_unary(s, syms);
+fn eval_mul<'a>(s: &'a str, syms: &HashMap<String, i64>, radix: u32) -> (i64, &'a str) {
+    let (mut val, rest) = eval_unary(s, syms, radix);
     let mut rest = rest.trim_start();
     loop {
         if rest.starts_with('*') {
-            let (rval, r) = eval_unary(rest[1..].trim_start(), syms);
+            let (rval, r) = eval_unary(rest[1..].trim_start(), syms, radix);
             val *= rval;
             rest = r.trim_start();
         } else if rest.starts_with('/') {
-            let (rval, r) = eval_unary(rest[1..].trim_start(), syms);
+            let (rval, r) = eval_unary(rest[1..].trim_start(), syms, radix);
             val = if rval != 0 { val / rval } else { 0 };
             rest = r.trim_start();
         } else {
@@ -544,24 +745,24 @@ fn eval_mul<'a>(s: &'a str, syms: &HashMap<String, i64>) -> (i64, &'a str) {
     (val, rest)
 }
 
-fn eval_unary<'a>(s: &'a str, syms: &HashMap<String, i64>) -> (i64, &'a str) {
+fn eval_unary<'a>(s: &'a str, syms: &HashMap<String, i64>, radix: u32) -> (i64, &'a str) {
     let s = s.trim_start();
     if s.starts_with('-') {
-        let (v, r) = eval_atom(s[1..].trim_start(), syms);
+        let (v, r) = eval_atom(s[1..].trim_start(), syms, radix);
         return (-v, r);
     }
     if s.starts_with('+') {
-        return eval_atom(s[1..].trim_start(), syms);
+        return eval_atom(s[1..].trim_start(), syms, radix);
     }
-    eval_atom(s, syms)
+    eval_atom(s, syms, radix)
 }
 
-fn eval_atom<'a>(s: &'a str, syms: &HashMap<String, i64>) -> (i64, &'a str) {
+fn eval_atom<'a>(s: &'a str, syms: &HashMap<String, i64>, radix: u32) -> (i64, &'a str) {
     let s = s.trim_start();
     // Angle-bracket grouping
     if s.starts_with('<') {
         let body = collect_angle_body_str(&s[1..]);
-        let val = eval_expr(&body, syms);
+        let val = eval_expr(&body, syms, radix);
         let consumed = body.len() + 2; // < body >
         return (val, &s[consumed.min(s.len())..]);
     }
@@ -573,6 +774,16 @@ fn eval_atom<'a>(s: &'a str, syms: &HashMap<String, i64>) -> (i64, &'a str) {
             .unwrap_or(rest.len());
         let digits = &rest[..end];
         let val = i64::from_str_radix(digits, 8).unwrap_or(0);
+        return (val, &rest[end..]);
+    }
+    // Decimal: ^D<digits> or ^D digits
+    if s.starts_with("^D") || s.starts_with("^d") {
+        let rest = &s[2..].trim_start();
+        let end = rest
+            .find(|c: char| !c.is_ascii_digit())
+            .unwrap_or(rest.len());
+        let digits = &rest[..end];
+        let val: i64 = digits.parse().unwrap_or(0);
         return (val, &rest[end..]);
     }
     // Hex: $HH
@@ -588,7 +799,7 @@ fn eval_atom<'a>(s: &'a str, syms: &HashMap<String, i64>) -> (i64, &'a str) {
     // Decimal number
     if s.starts_with(|c: char| c.is_ascii_digit()) {
         let end = s.find(|c: char| !c.is_ascii_digit()).unwrap_or(s.len());
-        let val: i64 = s[..end].parse().unwrap_or(0);
+        let val = parse_bare_number(&s[..end], radix).unwrap_or(0);
         return (val, &s[end..]);
     }
     // Character literal: 'X'
@@ -630,6 +841,12 @@ fn collect_angle_body_str(s: &str) -> String {
         }
     }
     out
+}
+
+fn parse_bare_number(digits: &str, radix: u32) -> Option<i64> {
+    i64::from_str_radix(digits, radix)
+        .ok()
+        .or_else(|| digits.parse().ok())
 }
 
 // ---------------------------------------------------------------------------

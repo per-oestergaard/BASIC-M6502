@@ -205,6 +205,19 @@ fn split_args(s: &str) -> Vec<String> {
 // ---------------------------------------------------------------------------
 
 fn parse_one(stmt: &str) -> Result<Vec<SourceNode>> {
+    // Labels must be recognized before directive classification so label names
+    // like `LET:` are not mistaken for assembler control directives.
+    let fend = first_token_end(stmt);
+    let first_tok = &stmt[..fend];
+    if first_tok.ends_with("::") || first_tok.ends_with(':') {
+        let label_name = first_tok.trim_end_matches(':').to_string();
+        let rest = stmt[fend..].trim_start();
+        if rest.is_empty() {
+            return Ok(vec![SourceNode::Label { name: label_name }]);
+        }
+        return parse_with_label(rest, Some(label_name));
+    }
+
     let kw = first_keyword_upper(stmt);
 
     match kw.as_str() {
@@ -227,34 +240,28 @@ fn parse_one(stmt: &str) -> Result<Vec<SourceNode>> {
             return Ok(vec![SourceNode::Org { expr }]);
         }
 
+        "RADIX" => {
+            let base = after_first_keyword(stmt).trim().parse::<u32>().unwrap_or(10);
+            return Ok(vec![SourceNode::Radix { base }]);
+        }
+
         // Data directives (DT = "define text", same byte output as DC).
-        // DCE is left to macro expansion because this source defines it as a
-        // macro with side effects on Q in the short-error table.
-        "DC" | "DCI" | "DT" => return parse_dc(stmt, None),
+        // DCE and DCI are left to macro expansion because this source defines
+        // them as macros with side effects on Q.
+        "DC" | "DT" => return parse_dc(stmt, None),
         "BYTE" | "DB" | ".BYTE" => return parse_bytes(stmt, None),
         "WORD" | "DW" | ".WORD" => return parse_words(stmt, None),
+        "ADR" => return parse_adr(stmt, None),
         "XWD" => return parse_xwd(stmt, None),
         "BLKB" | "BLKW" | "BLOCK" | "RES" | ".RES" => return parse_res(stmt, None),
 
         // Assembler control / metadata: silently skip
-        "TITLE" | "SUBTTL" | "SEARCH" | "SALL" | "XLIST" | "LIST" | "PAGE" | "PURGE" | "RADIX"
-        | "PRINTX" | "EXP" | "ADR" | "ASECT" | "DSECT" | "IRPC" | "LET" | "END" => {
+        "TITLE" | "SUBTTL" | "SEARCH" | "SALL" | "XLIST" | "LIST" | "PAGE" | "PURGE"
+        | "PRINTX" | "EXP" | "ASECT" | "DSECT" | "IRPC" | "LET" | "END" => {
             return Ok(vec![]);
         }
 
         _ => {}
-    }
-
-    // --- Label: first token ends with ':' or '::' ---
-    let fend = first_token_end(stmt);
-    let first_tok = &stmt[..fend];
-    if first_tok.ends_with("::") || first_tok.ends_with(':') {
-        let label_name = first_tok.trim_end_matches(':').to_string();
-        let rest = stmt[fend..].trim_start();
-        if rest.is_empty() {
-            return Ok(vec![SourceNode::Label { name: label_name }]);
-        }
-        return parse_with_label(rest, Some(label_name));
     }
 
     // --- Equate: NAME = EXPR or NAME == EXPR (at depth 0) ---
@@ -338,19 +345,26 @@ fn parse_with_label(body: &str, label: Option<String>) -> Result<Vec<SourceNode>
             nodes.extend(parse_conditional(body, CondKind::If2)?);
             return Ok(nodes);
         }
-        "DC" | "DCI" | "DT" => return parse_dc(body, label),
+        "DC" | "DT" => return parse_dc(body, label),
         "BYTE" | "DB" | ".BYTE" => return parse_bytes(body, label),
         "WORD" | "DW" | ".WORD" => return parse_words(body, label),
+        "ADR" => return parse_adr(body, label),
         "XWD" => return parse_xwd(body, label),
         "BLKB" | "BLKW" | "BLOCK" | "RES" | ".RES" => return parse_res(body, label),
         "REPEAT" => return parse_repeat(body, label),
+        "RADIX" => {
+            let mut nodes: Vec<SourceNode> = label.into_iter().map(|n| SourceNode::Label { name: n }).collect();
+            let base = after_first_keyword(body).trim().parse::<u32>().unwrap_or(10);
+            nodes.push(SourceNode::Radix { base });
+            return Ok(nodes);
+        }
         "EQU" | "DEFL" => {
             let name = label.unwrap_or_default();
             let expr = after_first_keyword(body).trim().to_string();
             return Ok(vec![SourceNode::Equate { name, expr }]);
         }
-        "TITLE" | "SUBTTL" | "SEARCH" | "SALL" | "XLIST" | "LIST" | "PAGE" | "PURGE" | "RADIX"
-        | "PRINTX" | "EXP" | "ADR" | "ASECT" | "DSECT" | "IRPC" => {
+        "TITLE" | "SUBTTL" | "SEARCH" | "SALL" | "XLIST" | "LIST" | "PAGE" | "PURGE"
+        | "PRINTX" | "EXP" | "ASECT" | "DSECT" | "IRPC" => {
             return Ok(label
                 .into_iter()
                 .map(|name| SourceNode::Label { name })
@@ -372,12 +386,21 @@ fn parse_with_label(body: &str, label: Option<String>) -> Result<Vec<SourceNode>
         }]);
     }
 
-    // Single token with no unquoted whitespace → symbol used as data byte
-    // (e.g. `LINWID: LINLEN` where LINLEN is an equate).
+    // Single token with no unquoted whitespace. If the token has attached
+    // operand text (for example `DCE"NF"`), treat it as a macro call;
+    // otherwise it is a symbol used as data byte (for example `LINLEN`).
     if !body.contains(|c: char| c.is_ascii_whitespace()) {
-        return Ok(vec![SourceNode::Bytes {
+        let rest = after_first_keyword(body).trim();
+        if rest.is_empty() {
+            return Ok(vec![SourceNode::Bytes {
+                label,
+                args: split_args(body),
+            }]);
+        }
+        return Ok(vec![SourceNode::MacroCall {
             label,
-            args: split_args(body),
+            name: kw,
+            arg: Some(rest.to_string()),
         }]);
     }
 
@@ -512,9 +535,43 @@ fn parse_words(stmt: &str, label: Option<String>) -> Result<Vec<SourceNode>> {
     }])
 }
 
+fn parse_adr(stmt: &str, label: Option<String>) -> Result<Vec<SourceNode>> {
+    let rest = after_first_keyword(stmt).trim();
+    let expr = if rest.starts_with('(') && rest.ends_with(')') && rest.len() >= 2 {
+        rest[1..rest.len() - 1].trim().to_string()
+    } else {
+        rest.to_string()
+    };
+    Ok(vec![SourceNode::Word {
+        label,
+        args: vec![expr],
+    }])
+}
+
+fn parse_numeric_literal(text: &str) -> Option<i64> {
+    let text = text.trim();
+    if let Some(rest) = text.strip_prefix("^") {
+        if let Some(octal) = rest.strip_prefix('O').or_else(|| rest.strip_prefix('o')) {
+            return i64::from_str_radix(octal, 8).ok();
+        }
+        if let Some(decimal) = rest.strip_prefix('D').or_else(|| rest.strip_prefix('d')) {
+            return decimal.parse().ok();
+        }
+    }
+    if let Some(hex) = text.strip_prefix('$') {
+        return i64::from_str_radix(hex, 16).ok();
+    }
+    text.parse().ok()
+}
+
 fn parse_xwd(stmt: &str, label: Option<String>) -> Result<Vec<SourceNode>> {
-    // XWD addr,opcode → emit as 3 bytes: opcode_lo, addr_lo, addr_hi
-    // This creates a 3-byte instruction for skip tricks (BIT abs or similar).
+    // XWD is used here for a small set of instruction-encoding tricks:
+    // - SKIP1 (`BIT zp`) must emit only the opcode byte so the next opcode byte
+    //   is consumed as the zero-page operand.
+    // - SKIP2 (`BIT abs`) is also used as an opcode-only skip trick that
+    //   consumes the following two-byte instruction.
+    // - The remaining site (`LDAI`) uses a synthetic 2-byte form whose operand
+    //   only needs to be non-zero.
     let rest = after_first_keyword(stmt);
     let args = split_args(rest);
     if args.len() != 2 {
@@ -523,17 +580,20 @@ fn parse_xwd(stmt: &str, label: Option<String>) -> Result<Vec<SourceNode>> {
             args,
         }]);
     }
-    // args[0] = address (16-bit), args[1] = opcode (8-bit)
-    // Output: low-byte of opcode, then 16-bit address (little-endian)
     let addr = &args[0];
     let opcode = &args[1];
+    let opcode_value = parse_numeric_literal(opcode).unwrap_or(-1);
+    let emitted = match opcode_value {
+        0x24 => vec![format!("<{opcode}>&^O377")],
+        0x2C => vec![format!("<{opcode}>&^O377")],
+        _ => vec![
+            format!("<{opcode}>&^O377"),
+            format!("<{addr}>/^O400"),
+        ],
+    };
     Ok(vec![SourceNode::Bytes {
         label,
-        args: vec![
-            format!("<{opcode}>&^O377"),  // low byte of opcode
-            format!("<{addr}>&^O377"),    // low byte of address
-            format!("<{addr}>/^O400"),    // high byte of address
-        ],
+        args: emitted,
     }])
 }
 

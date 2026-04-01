@@ -123,35 +123,45 @@ impl BasicHarness {
         cpu.mem[..load_len].copy_from_slice(&data[..load_len]);
 
         // ── Pre-initialise BASIC variables ──────────────────────────────────
-        // MEMSIZ ($0074-$0075): top of usable RAM — set to $3000 (12 KB)
-        cpu.mem[0x0074] = 0x00;
-        cpu.mem[0x0075] = 0x30;
+        // MEMSIZ ($0076-$0077): top of usable RAM — set to $3000 (12 KB)
+        cpu.mem[0x0076] = 0x00;
+        cpu.mem[0x0077] = 0x30;
 
-        // TXTTAB ($0068-$0069): prime so INIT's `INC TXTTAB` wraps lo $FF→$00 and
+        // TXTTAB ($006A-$006B): prime so INIT's `INC TXTTAB` wraps lo $FF→$00 and
         // the BNE is not taken, causing INIT to also do `INC TXTTAB+1` ($07→$08).
         // Result: TXTTAB = $0800 (start of program text, just after the binary).
-        cpu.mem[0x0068] = 0xFF;
-        cpu.mem[0x0069] = 0x07;
+        cpu.mem[0x006A] = 0xFF;
+        cpu.mem[0x006B] = 0x07;
 
         // ── Shared state: output buffer & input line queue ───────────────────
         let output: Rc<RefCell<Vec<u8>>> = Rc::new(RefCell::new(Vec::new()));
-        // Each entry is one complete input line (bytes with bit7 set, ending with $8D CR).
+        // Each entry is one complete input line as GETLN would return it:
+        // high-bit-set characters in BUF, with X set to the character count.
+        // INLIN appends the trailing NUL itself for REALIO=4.
         let lines: Rc<RefCell<VecDeque<Vec<u8>>>> = Rc::new(RefCell::new(VecDeque::new()));
+        let trace_steps: Rc<RefCell<usize>> = Rc::new(RefCell::new(0));
+        let after_run: Rc<RefCell<bool>> = Rc::new(RefCell::new(false));
+        let run_output_start: Rc<RefCell<Option<usize>>> = Rc::new(RefCell::new(None));
 
         {
             let mut q = lines.borrow_mut();
+            // Apple BASIC cold-start prompts for memory size and terminal width
+            // before it reaches the main READY loop. Supply an explicit memory
+            // size so the interpreter does not perform its destructive RAM probe
+            // against the flat emulator memory image, then leave terminal width
+            // blank to accept the default.
+            q.push_back(b"12288".iter().map(|b| b | 0x80).collect());
+            q.push_back(b"72".iter().map(|b| b | 0x80).collect());
             for line in program.lines() {
-                let mut bytes: Vec<u8> = line
+                let bytes: Vec<u8> = line
                     .to_ascii_uppercase()
                     .bytes()
                     .map(|b| b | 0x80)
                     .collect();
-                bytes.push(0x8D); // Apple II CR (bit7 set)
                 q.push_back(bytes);
             }
             // Feed "RUN" after the program
-            let mut run_bytes: Vec<u8> = b"RUN".iter().map(|b| b | 0x80).collect();
-            run_bytes.push(0x8D);
+            let run_bytes: Vec<u8> = b"RUN".iter().map(|b| b | 0x80).collect();
             q.push_back(run_bytes);
         }
 
@@ -161,53 +171,60 @@ impl BasicHarness {
         // Convention: write the line (with high bits set) into BUF ($0200),
         // set X = character count, set carry, then RTS.
         let lq = lines.clone();
+        let trace_after_input = trace_steps.clone();
+        let run_state = after_run.clone();
+        let run_output_mark = run_output_start.clone();
+        let output_for_run_mark = output.clone();
         cpu.hook_exec(0xFD67, move |cpu| {
             if let Some(line) = lq.borrow_mut().pop_front() {
-                eprintln!("DEBUG: GETLN hook called, feeding {} bytes: {:?}", 
-                    line.len(), String::from_utf8_lossy(&line.iter().map(|&b| b & 0x7F).collect::<Vec<_>>()));
+                let ascii: Vec<u8> = line.iter().map(|&b| b & 0x7F).collect();
+                let text = String::from_utf8_lossy(&ascii);
+                eprintln!("DEBUG: GETLN hook called, feeding {} bytes: {:?}", line.len(), text);
+                if text == "RUN" {
+                    *run_state.borrow_mut() = true;
+                    *run_output_mark.borrow_mut() = Some(output_for_run_mark.borrow().len());
+                    let mut ptr = (cpu.mem[0x006A] as u16) | ((cpu.mem[0x006B] as u16) << 8);
+                    let vartab = (cpu.mem[0x006C] as u16) | ((cpu.mem[0x006D] as u16) << 8);
+                    eprintln!("DEBUG: TXTTAB=${:04X} VARTAB=${:04X}", ptr, vartab);
+                    let mut guard = 0usize;
+                    while ptr != 0 && ptr < vartab && guard < 8 {
+                        let next = (cpu.mem[ptr as usize] as u16)
+                            | ((cpu.mem[ptr as usize + 1] as u16) << 8);
+                        let line_no = (cpu.mem[ptr as usize + 2] as u16)
+                            | ((cpu.mem[ptr as usize + 3] as u16) << 8);
+                        let mut bytes = Vec::new();
+                        let mut cur = ptr as usize + 4;
+                        while cur < cpu.mem.len() && cpu.mem[cur] != 0 {
+                            bytes.push(cpu.mem[cur]);
+                            cur += 1;
+                        }
+                        eprintln!(
+                            "DEBUG: line {} next=${:04X} bytes={:02X?}",
+                            line_no,
+                            next,
+                            bytes
+                        );
+                        if next == 0 || next <= ptr {
+                            break;
+                        }
+                        ptr = next;
+                        guard += 1;
+                    }
+                }
                 let len = line.len().min(255);
+                cpu.mem[0x0200..0x02FF].fill(0);
                 for (i, &b) in line[..len].iter().enumerate() {
                     cpu.mem[0x0200 + i] = b;
                 }
                 cpu.x = len as u8;
                 cpu.p |= 0x01; // set carry (success)
+                *trace_after_input.borrow_mut() = if text == "RUN" { 20000 } else { 1500 };
             } else {
                 // No more input - this should cause the test to complete or timeout
                 eprintln!("DEBUG: GETLN hook - no more input, halting CPU");
                 cpu.halted = true;
             }
             cpu.trap_rts();
-        });
-
-        // Temporary diagnostic hook: confirm the first input line reaches CRUNCH.
-        let crunch_count = Rc::new(RefCell::new(0usize));
-        let crunch_seen = crunch_count.clone();
-        cpu.hook_exec(0x0B12, move |cpu| {
-            *crunch_seen.borrow_mut() += 1;
-            if *crunch_seen.borrow() <= 3 {
-                let mut bytes = Vec::new();
-                for offset in 0..40u16 {
-                    let byte = cpu.mem[0x0200 + offset as usize];
-                    if byte == 0 {
-                        break;
-                    }
-                    bytes.push(byte);
-                }
-                let text: String = bytes
-                    .into_iter()
-                    .map(|b| {
-                        let c = b & 0x7F;
-                        if c >= 0x20 && c < 0x7F {
-                            c as char
-                        } else if c == 0x0D {
-                            '\r'
-                        } else {
-                            '.'
-                        }
-                    })
-                    .collect();
-                eprintln!("DEBUG: CRUNCH hook #{} TXTPTR=${:04X} BUF={:?}", *crunch_seen.borrow(), ((cpu.mem[0x7B] as u16) << 8) | cpu.mem[0x7A] as u16, text);
-            }
         });
 
         // Temporary diagnostic hook: stop on the first BASIC error and print X.
@@ -237,7 +254,16 @@ impl BasicHarness {
                 cpu.x,
                 error_name,
                 cpu.a,
-                ((cpu.mem[0x7B] as u16) << 8) | cpu.mem[0x7A] as u16
+                (cpu.mem[0x0001] as u16) | ((cpu.mem[0x0002] as u16) << 8)
+            );
+            eprintln!(
+                "DEBUG: CHRGET bytes {:02X} {:02X} {:02X} {:02X} {:02X} {:02X}",
+                cpu.mem[0x00C3],
+                cpu.mem[0x00C4],
+                cpu.mem[0x00C5],
+                cpu.mem[0x00C6],
+                cpu.mem[0x00C7],
+                cpu.mem[0x00C8]
             );
             cpu.halted = true;
         });
@@ -246,11 +272,23 @@ impl BasicHarness {
         let out1 = output.clone();
         let out1_count = Rc::new(RefCell::new(0usize));
         let oc1 = out1_count.clone();
+        let after_run_out1 = after_run.clone();
         cpu.hook_exec(0xFECD, move |cpu| {
             *oc1.borrow_mut() += 1;
             if *oc1.borrow() <= 5 {
                 eprintln!("DEBUG: COUT ($FECD) called, A=${:02X} '{}'", cpu.a, 
                     if (cpu.a & 0x7F) >= 0x20 && (cpu.a & 0x7F) < 0x7F { (cpu.a & 0x7F) as char } else { '?' });
+            }
+            if *after_run_out1.borrow() {
+                eprintln!(
+                    "DEBUG: POST-RUN COUT ($FECD) A=${:02X} '{}'",
+                    cpu.a,
+                    if (cpu.a & 0x7F) >= 0x20 && (cpu.a & 0x7F) < 0x7F {
+                        (cpu.a & 0x7F) as char
+                    } else {
+                        '.'
+                    }
+                );
             }
             let ch = cpu.a & 0x7F;
             if ch >= 0x20 && ch < 0x7F {
@@ -266,11 +304,23 @@ impl BasicHarness {
         let out2 = output.clone();
         let out2_count = Rc::new(RefCell::new(0usize));
         let oc2 = out2_count.clone();
+        let after_run_out2 = after_run.clone();
         cpu.hook_exec(0xFDED, move |cpu| {
             *oc2.borrow_mut() += 1;
             if *oc2.borrow() <= 10 {
                 eprintln!("DEBUG: COUT1 ($FDED) #{}, A=${:02X} '{}'", *oc2.borrow(), cpu.a, 
                     if (cpu.a & 0x7F) >= 0x20 && (cpu.a & 0x7F) < 0x7F { (cpu.a & 0x7F) as char } else { '.' });
+            }
+            if *after_run_out2.borrow() {
+                eprintln!(
+                    "DEBUG: POST-RUN COUT1 ($FDED) A=${:02X} '{}'",
+                    cpu.a,
+                    if (cpu.a & 0x7F) >= 0x20 && (cpu.a & 0x7F) < 0x7F {
+                        (cpu.a & 0x7F) as char
+                    } else {
+                        '.'
+                    }
+                );
             }
             let ch = cpu.a & 0x7F;
             if ch >= 0x20 && ch < 0x7F {
@@ -295,14 +345,41 @@ impl BasicHarness {
         // We stop when we see that, or on timeout.
         let start_cycles = cpu.cycles;
         let mut last_output_len = 0usize;
-
-        loop {
+        let mut recent_pcs: VecDeque<(u16, u8, u8, u8, u8, u8, u8)> = VecDeque::new();
+        let exit_reason = loop {
             if cpu.halted {
-                break;
+                break "halted";
             }
             if (cpu.cycles - start_cycles) >= max_cycles {
-                break;
+                break "timeout";
             }
+
+            if *trace_steps.borrow() > 0 {
+                let remaining = *trace_steps.borrow();
+                let pc = cpu.pc;
+                let op = cpu.mem[pc as usize];
+                let in_scrub_loop = (0x0AEE..=0x0AF7).contains(&pc);
+                if !in_scrub_loop || remaining % 40 == 0 {
+                    eprintln!(
+                        "TRACE: pc=${:04X} op=${:02X} a=${:02X} x=${:02X} y=${:02X} sp=${:02X} p=${:02X} txtptr=${:04X}",
+                        pc,
+                        op,
+                        cpu.a,
+                        cpu.x,
+                        cpu.y,
+                        cpu.sp,
+                        cpu.p,
+                        (cpu.mem[0x0001] as u16) | ((cpu.mem[0x0002] as u16) << 8)
+                    );
+                }
+                *trace_steps.borrow_mut() = remaining - 1;
+            }
+
+            recent_pcs.push_back((cpu.pc, cpu.mem[cpu.pc as usize], cpu.a, cpu.x, cpu.y, cpu.sp, cpu.p));
+            if recent_pcs.len() > 64 {
+                recent_pcs.pop_front();
+            }
+
             cpu.step();
 
             // Check for "]" (prompt after RUN completes) in output
@@ -313,14 +390,21 @@ impl BasicHarness {
                 // "]" followed by CR is the BASIC prompt after execution
                 let s: &[u8] = &buf;
                 if s.windows(2).any(|w| w == b"]\r" || w == b"]\n") {
-                    break;
+                    break "prompt";
                 }
             }
-        }
+        };
+
+        eprintln!(
+            "DEBUG: run loop exited via {} at PC=${:04X} cycles={}",
+            exit_reason,
+            cpu.pc,
+            cpu.cycles - start_cycles
+        );
 
         // Convert output to string: Apple II CR ($0D) → newline, strip non-printables
         let raw = output.borrow().clone();
-        let s: String = raw
+        let s = normalize_basic_output(&raw
             .iter()
             .map(|&b| {
                 let c = b & 0x7F;
@@ -333,23 +417,61 @@ impl BasicHarness {
                 }
             })
             .filter(|&c| c != '\0')
-            .collect();
+            .collect::<String>());
 
-        // Extract just the portion after "RUN\r" echo — the actual program output.
-        // Find the last "]" prompt to locate start of RUN output.
-        if let Some(pos) = s.rfind(']') {
-            // Everything between the line containing "RUN" and the final "]"
-            let before_last_prompt = &s[..pos];
-            // Find where "RUN" echo appears and take everything after it
-            if let Some(run_pos) = before_last_prompt.rfind("RUN") {
-                let after_run = before_last_prompt[run_pos + 3..].trim_start_matches('\n');
-                return Ok(after_run.trim_end_matches('\n').to_string());
+        if let Some(start) = *run_output_start.borrow() {
+            let post_run = normalize_basic_output(&raw[start..]
+                .iter()
+                .map(|&b| {
+                    let c = b & 0x7F;
+                    if c == 0x0D {
+                        '\n'
+                    } else if c >= 0x20 && c < 0x7F {
+                        c as char
+                    } else {
+                        '\0'
+                    }
+                })
+                .filter(|&c| c != '\0')
+                .collect::<String>());
+            let trimmed = post_run.trim();
+            if let Some(without_ok) = trimmed.strip_suffix("\n\nOK") {
+                return Ok(without_ok.trim().to_string());
             }
-            return Ok(before_last_prompt.trim().to_string());
+            if let Some(without_ok) = trimmed.strip_suffix("\nOK") {
+                return Ok(without_ok.trim().to_string());
+            }
+            if !trimmed.is_empty() {
+                return Ok(trimmed.to_string());
+            }
+        }
+
+        // Strip the cold-start transcript and return only program output.
+        // Apple BASIC prints a stable startup preamble ending with a standalone
+        // "OK" before user program execution begins.
+        if let Some(ok_pos) = s.rfind("\nOK\n") {
+            let after_ok = s[ok_pos + 4..].trim();
+            if !after_ok.is_empty() {
+                return Ok(after_ok.to_string());
+            }
+        }
+
+        if let Some(ok_pos) = s.rfind("OK\n") {
+            let after_ok = s[ok_pos + 3..].trim();
+            if !after_ok.is_empty() {
+                return Ok(after_ok.to_string());
+            }
         }
 
         Ok(s.trim().to_string())
     }
+}
+
+fn normalize_basic_output(text: &str) -> String {
+    text.split('\n')
+        .map(|line| line.trim_end_matches(' '))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 #[cfg(test)]
@@ -392,11 +514,11 @@ mod tests {
         let mut cpu = crate::Cpu::new();
         cpu.mem[..data.len().min(65536)].copy_from_slice(&data[..data.len().min(65536)]);
         // MEMSIZ = $3000
-        cpu.mem[0x0074] = 0x00;
-        cpu.mem[0x0075] = 0x30;
+        cpu.mem[0x0076] = 0x00;
+        cpu.mem[0x0077] = 0x30;
         // TXTTAB preset to $0800 so INIT's INC makes it $0801 (hi byte $08, non-zero)
-        cpu.mem[0x0068] = 0xFF; // hi byte wraps after INC: $00 + 1 = $01 → wait, INC lo
-        cpu.mem[0x0069] = 0x07; // hi byte = $07; after INC lo ($FF→$00) BASIC does INC hi → $08
+        cpu.mem[0x006A] = 0xFF; // lo byte wraps after INC: $FF -> $00
+        cpu.mem[0x006B] = 0x07; // hi byte = $07; after lo wraps BASIC does INC hi -> $08
                                 // Actually: INIT does INC TXTTAB (lo only), BNE QROOM (skip INC hi if no carry)
                                 // To get non-zero hi: set TXTTAB lo=$FF so INC wraps to $00 (Z=1), BNE not taken,
                                 // then INC TXTTAB+1: $07+1=$08. TXTTAB = $0800.
@@ -491,8 +613,8 @@ mod tests {
             cpu.a, cpu.x, cpu.y, cpu.sp
         );
         println!(
-            "TXTTAB (ZP $68-$69): ${:02X} ${:02X}",
-            cpu.mem[0x68], cpu.mem[0x69]
+            "TXTTAB (ZP $6A-$6B): ${:02X} ${:02X}",
+            cpu.mem[0x6A], cpu.mem[0x6B]
         );
         println!(
             "CHRGET parse ptr ($BA-$BB): ${:02X} ${:02X}",

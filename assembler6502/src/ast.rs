@@ -35,6 +35,9 @@ pub enum SourceNode {
     /// An ORG directive: `ORG EXPR`.
     Org { expr: String },
 
+    /// A RADIX directive that changes the default numeric base.
+    Radix { base: u32 },
+
     /// A DEFINE macro definition.
     MacroDef {
         name: String,
@@ -102,11 +105,15 @@ pub enum FlatStmt {
     /// Label definition.
     Label(String),
 
-    /// Compile-time numeric equate (value already evaluated).
-    Equate { name: String, value: i64 },
+    /// Compile-time equate expression. This is resolved during assembly pass 1
+    /// so equates can depend on labels defined earlier in the flat stream.
+    Equate { name: String, expr: String },
 
     /// Origin change.
     Org(u16),
+
+    /// Default numeric base change.
+    Radix(u32),
 
     /// Byte data emission.
     Bytes {

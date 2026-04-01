@@ -795,10 +795,10 @@ impl Cpu {
                 );
             }
             RTI => {
+                let p = self.pop();
                 let lo = self.pop() as u16;
                 let hi = self.pop() as u16;
-                let p = self.pop();
-                self.p = p | FLAG_U;
+                self.p = (p | FLAG_U) & !FLAG_B;
                 self.pc = lo | (hi << 8);
             }
 
