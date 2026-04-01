@@ -241,7 +241,10 @@ fn parse_one(stmt: &str) -> Result<Vec<SourceNode>> {
         }
 
         "RADIX" => {
-            let base = after_first_keyword(stmt).trim().parse::<u32>().unwrap_or(10);
+            let base = after_first_keyword(stmt)
+                .trim()
+                .parse::<u32>()
+                .unwrap_or(10);
             return Ok(vec![SourceNode::Radix { base }]);
         }
 
@@ -257,8 +260,8 @@ fn parse_one(stmt: &str) -> Result<Vec<SourceNode>> {
         "BLKB" | "BLKW" | "BLOCK" | "RES" | ".RES" => return parse_res(stmt, None),
 
         // Assembler control / metadata: silently skip
-        "TITLE" | "SUBTTL" | "SEARCH" | "SALL" | "XLIST" | "LIST" | "PAGE" | "PURGE"
-        | "PRINTX" | "ASECT" | "DSECT" | "IRPC" | "LET" | "END" => {
+        "TITLE" | "SUBTTL" | "SEARCH" | "SALL" | "XLIST" | "LIST" | "PAGE" | "PURGE" | "PRINTX"
+        | "ASECT" | "DSECT" | "IRPC" | "LET" | "END" => {
             return Ok(vec![]);
         }
 
@@ -322,27 +325,42 @@ fn parse_with_label(body: &str, label: Option<String>) -> Result<Vec<SourceNode>
     match kw.as_str() {
         // Conditionals: emit label first, then the conditional
         "IFE" | "IFEQ" => {
-            let mut nodes: Vec<SourceNode> = label.into_iter().map(|n| SourceNode::Label { name: n }).collect();
+            let mut nodes: Vec<SourceNode> = label
+                .into_iter()
+                .map(|n| SourceNode::Label { name: n })
+                .collect();
             nodes.extend(parse_conditional(body, CondKind::IfEq)?);
             return Ok(nodes);
         }
         "IFN" | "IFNE" => {
-            let mut nodes: Vec<SourceNode> = label.into_iter().map(|n| SourceNode::Label { name: n }).collect();
+            let mut nodes: Vec<SourceNode> = label
+                .into_iter()
+                .map(|n| SourceNode::Label { name: n })
+                .collect();
             nodes.extend(parse_conditional(body, CondKind::IfNe)?);
             return Ok(nodes);
         }
         "IFNDEF" => {
-            let mut nodes: Vec<SourceNode> = label.into_iter().map(|n| SourceNode::Label { name: n }).collect();
+            let mut nodes: Vec<SourceNode> = label
+                .into_iter()
+                .map(|n| SourceNode::Label { name: n })
+                .collect();
             nodes.extend(parse_conditional(body, CondKind::IfNotDef)?);
             return Ok(nodes);
         }
         "IF1" => {
-            let mut nodes: Vec<SourceNode> = label.into_iter().map(|n| SourceNode::Label { name: n }).collect();
+            let mut nodes: Vec<SourceNode> = label
+                .into_iter()
+                .map(|n| SourceNode::Label { name: n })
+                .collect();
             nodes.extend(parse_conditional(body, CondKind::If1)?);
             return Ok(nodes);
         }
         "IF2" => {
-            let mut nodes: Vec<SourceNode> = label.into_iter().map(|n| SourceNode::Label { name: n }).collect();
+            let mut nodes: Vec<SourceNode> = label
+                .into_iter()
+                .map(|n| SourceNode::Label { name: n })
+                .collect();
             nodes.extend(parse_conditional(body, CondKind::If2)?);
             return Ok(nodes);
         }
@@ -355,8 +373,14 @@ fn parse_with_label(body: &str, label: Option<String>) -> Result<Vec<SourceNode>
         "BLKB" | "BLKW" | "BLOCK" | "RES" | ".RES" => return parse_res(body, label),
         "REPEAT" => return parse_repeat(body, label),
         "RADIX" => {
-            let mut nodes: Vec<SourceNode> = label.into_iter().map(|n| SourceNode::Label { name: n }).collect();
-            let base = after_first_keyword(body).trim().parse::<u32>().unwrap_or(10);
+            let mut nodes: Vec<SourceNode> = label
+                .into_iter()
+                .map(|n| SourceNode::Label { name: n })
+                .collect();
+            let base = after_first_keyword(body)
+                .trim()
+                .parse::<u32>()
+                .unwrap_or(10);
             nodes.push(SourceNode::Radix { base });
             return Ok(nodes);
         }
@@ -365,8 +389,8 @@ fn parse_with_label(body: &str, label: Option<String>) -> Result<Vec<SourceNode>
             let expr = after_first_keyword(body).trim().to_string();
             return Ok(vec![SourceNode::Equate { name, expr }]);
         }
-        "TITLE" | "SUBTTL" | "SEARCH" | "SALL" | "XLIST" | "LIST" | "PAGE" | "PURGE"
-        | "PRINTX" | "ASECT" | "DSECT" | "IRPC" => {
+        "TITLE" | "SUBTTL" | "SEARCH" | "SALL" | "XLIST" | "LIST" | "PAGE" | "PURGE" | "PRINTX"
+        | "ASECT" | "DSECT" | "IRPC" => {
             return Ok(label
                 .into_iter()
                 .map(|name| SourceNode::Label { name })
@@ -578,10 +602,7 @@ fn parse_xwd(stmt: &str, label: Option<String>) -> Result<Vec<SourceNode>> {
     let rest = after_first_keyword(stmt);
     let args = split_args(rest);
     if args.len() != 2 {
-        return Ok(vec![SourceNode::Bytes {
-            label,
-            args,
-        }]);
+        return Ok(vec![SourceNode::Bytes { label, args }]);
     }
     let addr = &args[0];
     let opcode = &args[1];
@@ -590,10 +611,7 @@ fn parse_xwd(stmt: &str, label: Option<String>) -> Result<Vec<SourceNode>> {
         0x24 => vec![format!("<{opcode}>&^O377")],
         0x2C => vec![format!("<{opcode}>&^O377")],
         0xA9 => vec![format!("<{opcode}>&^O377")],
-        _ => vec![
-            format!("<{opcode}>&^O377"),
-            format!("<{addr}>/^O400"),
-        ],
+        _ => vec![format!("<{opcode}>&^O377"), format!("<{addr}>/^O400")],
     };
     Ok(vec![SourceNode::Bytes {
         label,

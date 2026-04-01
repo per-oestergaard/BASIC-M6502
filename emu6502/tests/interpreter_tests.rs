@@ -181,3 +181,23 @@ fn test_math_funcs() {
 fn test_string_ops() {
     test_basic_program("string_ops");
 }
+
+#[test]
+fn test_restore_read() {
+    test_basic_program("restore_read");
+}
+
+#[test]
+fn test_on_goto() {
+    test_basic_program("on_goto");
+}
+
+#[test]
+fn test_def_fn() {
+    test_basic_program("def_fn");
+}
+
+#[test]
+fn test_string_builtins() {
+    test_basic_program("string_builtins");
+}
