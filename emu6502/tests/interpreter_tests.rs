@@ -7,6 +7,7 @@ use emu6502::BasicHarness;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Once;
+use tracing::info;
 
 static INIT: Once = Once::new();
 
@@ -49,7 +50,7 @@ fn test_basic_program(program_name: &str) {
         .unwrap_or_else(|e| panic!("Failed to read {}.expected: {}", program_name, e));
 
     if !interpreter_exists() {
-        eprintln!("SKIP: {} (interpreter not built yet)", program_name);
+        info!(program = program_name, "skipping test because interpreter binary is not built");
         return;
     }
 
@@ -105,9 +106,10 @@ fn test_expressions() {
 
 #[test]
 fn test_interpreter_binary_status() {
+    init_tracing();
     if interpreter_exists() {
-        println!("✓ Interpreter binary found at {}", INTERPRETER_BINARY);
+        info!(path = INTERPRETER_BINARY, "interpreter binary found");
     } else {
-        println!("✗ Interpreter binary not found at {}", INTERPRETER_BINARY);
+        info!(path = INTERPRETER_BINARY, "interpreter binary not found");
     }
 }

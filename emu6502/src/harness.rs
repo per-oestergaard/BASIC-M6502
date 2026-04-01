@@ -5,6 +5,16 @@ use std::collections::VecDeque;
 /// Simple harness to run small 6502 BASIC-related snippets with a captured character output.
 /// It hooks writes to a configured I/O address (default 0xF001) and appends bytes to an output buffer.
 use std::rc::Rc;
+use tracing::trace;
+
+fn format_output_char(byte: u8) -> char {
+    let ch = byte & 0x7F;
+    if (0x20..0x7F).contains(&ch) {
+        ch as char
+    } else {
+        '.'
+    }
+}
 pub struct BasicHarness {
     pub cpu: Cpu,
     out_addr: u16,
@@ -179,13 +189,13 @@ impl BasicHarness {
             if let Some(line) = lq.borrow_mut().pop_front() {
                 let ascii: Vec<u8> = line.iter().map(|&b| b & 0x7F).collect();
                 let text = String::from_utf8_lossy(&ascii);
-                eprintln!("DEBUG: GETLN hook called, feeding {} bytes: {:?}", line.len(), text);
+                trace!(target: "emu6502::harness", bytes = line.len(), input = %text, "GETLN hook");
                 if text == "RUN" {
                     *run_state.borrow_mut() = true;
                     *run_output_mark.borrow_mut() = Some(output_for_run_mark.borrow().len());
                     let mut ptr = (cpu.mem[0x006A] as u16) | ((cpu.mem[0x006B] as u16) << 8);
                     let vartab = (cpu.mem[0x006C] as u16) | ((cpu.mem[0x006D] as u16) << 8);
-                    eprintln!("DEBUG: TXTTAB=${:04X} VARTAB=${:04X}", ptr, vartab);
+                    trace!(target: "emu6502::harness", txttab = ptr, vartab, "RUN starting");
                     let mut guard = 0usize;
                     while ptr != 0 && ptr < vartab && guard < 8 {
                         let next = (cpu.mem[ptr as usize] as u16)
@@ -198,12 +208,7 @@ impl BasicHarness {
                             bytes.push(cpu.mem[cur]);
                             cur += 1;
                         }
-                        eprintln!(
-                            "DEBUG: line {} next=${:04X} bytes={:02X?}",
-                            line_no,
-                            next,
-                            bytes
-                        );
+                        trace!(target: "emu6502::harness", line_no, next, bytes = ?bytes, "queued BASIC line");
                         if next == 0 || next <= ptr {
                             break;
                         }
@@ -221,7 +226,7 @@ impl BasicHarness {
                 *trace_after_input.borrow_mut() = if text == "RUN" { 20000 } else { 1500 };
             } else {
                 // No more input - this should cause the test to complete or timeout
-                eprintln!("DEBUG: GETLN hook - no more input, halting CPU");
+                trace!(target: "emu6502::harness", "GETLN exhausted input; halting CPU");
                 cpu.halted = true;
             }
             cpu.trap_rts();
@@ -249,21 +254,21 @@ impl BasicHarness {
                 34 => "UF",
                 _ => "?",
             };
-            eprintln!(
-                "DEBUG: ERROR hook X={} ({}) A=${:02X} TXTPTR=${:04X}",
-                cpu.x,
+            trace!(
+                target: "emu6502::harness",
+                error_code = cpu.x,
                 error_name,
-                cpu.a,
-                (cpu.mem[0x0001] as u16) | ((cpu.mem[0x0002] as u16) << 8)
-            );
-            eprintln!(
-                "DEBUG: CHRGET bytes {:02X} {:02X} {:02X} {:02X} {:02X} {:02X}",
-                cpu.mem[0x00C3],
-                cpu.mem[0x00C4],
-                cpu.mem[0x00C5],
-                cpu.mem[0x00C6],
-                cpu.mem[0x00C7],
-                cpu.mem[0x00C8]
+                a = cpu.a,
+                txtptr = (cpu.mem[0x0001] as u16) | ((cpu.mem[0x0002] as u16) << 8),
+                chrget = ?[
+                    cpu.mem[0x00C3],
+                    cpu.mem[0x00C4],
+                    cpu.mem[0x00C5],
+                    cpu.mem[0x00C6],
+                    cpu.mem[0x00C7],
+                    cpu.mem[0x00C8],
+                ],
+                "BASIC error"
             );
             cpu.halted = true;
         });
@@ -276,25 +281,10 @@ impl BasicHarness {
         cpu.hook_exec(0xFECD, move |cpu| {
             *oc1.borrow_mut() += 1;
             if *oc1.borrow() <= 5 {
-                eprintln!("DEBUG: COUT ($FECD) called, A=${:02X} '{}'", cpu.a, 
-                    if (cpu.a & 0x7F) >= 0x20 && (cpu.a & 0x7F) < 0x7F { (cpu.a & 0x7F) as char } else { '?' });
+                trace!(target: "emu6502::harness", call = *oc1.borrow(), a = cpu.a, ch = %format_output_char(cpu.a), "COUT");
             }
             if *after_run_out1.borrow() {
-                eprintln!(
-                    "DEBUG: POST-RUN COUT ($FECD) A=${:02X} '{}'",
-                    cpu.a,
-                    if (cpu.a & 0x7F) >= 0x20 && (cpu.a & 0x7F) < 0x7F {
-                        (cpu.a & 0x7F) as char
-                    } else {
-                        '.'
-                    }
-                );
-            }
-            let ch = cpu.a & 0x7F;
-            if ch >= 0x20 && ch < 0x7F {
-                eprint!("{}", ch as char);
-            } else if ch == 0x0D {
-                eprintln!();
+                trace!(target: "emu6502::harness", a = cpu.a, ch = %format_output_char(cpu.a), "POST-RUN COUT");
             }
             out1.borrow_mut().push(cpu.a & 0x7F);
             cpu.trap_rts();
@@ -308,25 +298,10 @@ impl BasicHarness {
         cpu.hook_exec(0xFDED, move |cpu| {
             *oc2.borrow_mut() += 1;
             if *oc2.borrow() <= 10 {
-                eprintln!("DEBUG: COUT1 ($FDED) #{}, A=${:02X} '{}'", *oc2.borrow(), cpu.a, 
-                    if (cpu.a & 0x7F) >= 0x20 && (cpu.a & 0x7F) < 0x7F { (cpu.a & 0x7F) as char } else { '.' });
+                trace!(target: "emu6502::harness", call = *oc2.borrow(), a = cpu.a, ch = %format_output_char(cpu.a), "COUT1");
             }
             if *after_run_out2.borrow() {
-                eprintln!(
-                    "DEBUG: POST-RUN COUT1 ($FDED) A=${:02X} '{}'",
-                    cpu.a,
-                    if (cpu.a & 0x7F) >= 0x20 && (cpu.a & 0x7F) < 0x7F {
-                        (cpu.a & 0x7F) as char
-                    } else {
-                        '.'
-                    }
-                );
-            }
-            let ch = cpu.a & 0x7F;
-            if ch >= 0x20 && ch < 0x7F {
-                eprint!("{}", ch as char);
-            } else if ch == 0x0D {
-                eprintln!();
+                trace!(target: "emu6502::harness", a = cpu.a, ch = %format_output_char(cpu.a), "POST-RUN COUT1");
             }
             out2.borrow_mut().push(cpu.a & 0x7F);
             cpu.trap_rts();
@@ -345,7 +320,6 @@ impl BasicHarness {
         // We stop when we see that, or on timeout.
         let start_cycles = cpu.cycles;
         let mut last_output_len = 0usize;
-        let mut recent_pcs: VecDeque<(u16, u8, u8, u8, u8, u8, u8)> = VecDeque::new();
         let exit_reason = loop {
             if cpu.halted {
                 break "halted";
@@ -360,24 +334,20 @@ impl BasicHarness {
                 let op = cpu.mem[pc as usize];
                 let in_scrub_loop = (0x0AEE..=0x0AF7).contains(&pc);
                 if !in_scrub_loop || remaining % 40 == 0 {
-                    eprintln!(
-                        "TRACE: pc=${:04X} op=${:02X} a=${:02X} x=${:02X} y=${:02X} sp=${:02X} p=${:02X} txtptr=${:04X}",
+                    trace!(
+                        target: "emu6502::harness",
                         pc,
                         op,
-                        cpu.a,
-                        cpu.x,
-                        cpu.y,
-                        cpu.sp,
-                        cpu.p,
-                        (cpu.mem[0x0001] as u16) | ((cpu.mem[0x0002] as u16) << 8)
+                        a = cpu.a,
+                        x = cpu.x,
+                        y = cpu.y,
+                        sp = cpu.sp,
+                        p = cpu.p,
+                        txtptr = (cpu.mem[0x0001] as u16) | ((cpu.mem[0x0002] as u16) << 8),
+                        "step"
                     );
                 }
                 *trace_steps.borrow_mut() = remaining - 1;
-            }
-
-            recent_pcs.push_back((cpu.pc, cpu.mem[cpu.pc as usize], cpu.a, cpu.x, cpu.y, cpu.sp, cpu.p));
-            if recent_pcs.len() > 64 {
-                recent_pcs.pop_front();
             }
 
             cpu.step();
@@ -395,12 +365,7 @@ impl BasicHarness {
             }
         };
 
-        eprintln!(
-            "DEBUG: run loop exited via {} at PC=${:04X} cycles={}",
-            exit_reason,
-            cpu.pc,
-            cpu.cycles - start_cycles
-        );
+        trace!(target: "emu6502::harness", exit_reason, pc = cpu.pc, cycles = cpu.cycles - start_cycles, "run loop exited");
 
         // Convert output to string: Apple II CR ($0D) → newline, strip non-printables
         let raw = output.borrow().clone();
@@ -477,8 +442,23 @@ fn normalize_basic_output(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Once;
+    use tracing::info;
+
+    static INIT_TRACING: Once = Once::new();
+
+    fn init_tracing() {
+        INIT_TRACING.call_once(|| {
+            tracing_subscriber::fmt()
+                .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+                .with_test_writer()
+                .init();
+        });
+    }
+
     #[test]
     fn hello_output() {
+        init_tracing();
         let mut h = BasicHarness::new();
         // Program at $0800: output "HELLO" by successive loads and stores, then BRK.
         let program = [
@@ -491,6 +471,7 @@ mod tests {
     }
     #[test]
     fn suffix_wait() {
+        init_tracing();
         let mut h = BasicHarness::new();
         let program = [
             0xA9, b'O', 0x8D, 0x02, 0x00, 0xA9, b'K', 0x8D, 0x02, 0x00, 0x00,
@@ -502,9 +483,10 @@ mod tests {
     /// Run with: cargo test trace_init -- --nocapture
     #[test]
     fn trace_init() {
+        init_tracing();
         let bin_path = "../build/original/basic.bin";
         if !std::path::Path::new(bin_path).exists() {
-            println!("SKIP: binary not found");
+            info!(path = bin_path, "skipping trace_init because binary was not found");
             return;
         }
         use std::cell::RefCell;
@@ -572,18 +554,11 @@ mod tests {
             cpu.step();
             if cpu.halted && halted_at.is_none() {
                 halted_at = Some(pc_before);
-                println!(
-                    "HALTED at PC=${:04X}, opcode=${:02X}",
-                    pc_before,
-                    data.get(pc_before as usize).copied().unwrap_or(0)
-                );
+                info!(pc = pc_before, opcode = data.get(pc_before as usize).copied().unwrap_or(0), "CPU halted");
                 break;
             }
             if *cqinln_hit.borrow() {
-                println!(
-                    "CQINLN ($FD67) hit at step {}! PC after hook = ${:04X}",
-                    instr_count, cpu.pc
-                );
+                info!(step = instr_count, pc = cpu.pc, "CQINLN hit");
                 *cqinln_hit.borrow_mut() = false;
             }
             if instr_count % 50_000 == 0 {
@@ -605,33 +580,13 @@ mod tests {
                 }
             })
             .collect();
-        println!("Instructions executed: {}", instr_count);
-        println!("Halted: {:?}", halted_at);
-        println!("PC at end: ${:04X}", cpu.pc);
-        println!(
-            "A=${:02X} X=${:02X} Y=${:02X} SP=${:02X}",
-            cpu.a, cpu.x, cpu.y, cpu.sp
-        );
-        println!(
-            "TXTTAB (ZP $6A-$6B): ${:02X} ${:02X}",
-            cpu.mem[0x6A], cpu.mem[0x6B]
-        );
-        println!(
-            "CHRGET parse ptr ($BA-$BB): ${:02X} ${:02X}",
-            cpu.mem[0xBA], cpu.mem[0xBB]
-        );
-        println!(
-            "PC samples every 50k: {:?}",
-            sample_pcs
-                .iter()
-                .map(|p| format!("${:04X}", p))
-                .collect::<Vec<_>>()
-        );
-        println!("Output ({} bytes): {:?}", raw.len(), &s[..s.len().min(200)]);
+        info!(instructions = instr_count, ?halted_at, pc = cpu.pc, a = cpu.a, x = cpu.x, y = cpu.y, sp = cpu.sp, "trace_init summary");
+        info!(txttab_lo = cpu.mem[0x6A], txttab_hi = cpu.mem[0x6B], chrget_lo = cpu.mem[0xBA], chrget_hi = cpu.mem[0xBB], samples = ?sample_pcs, output_len = raw.len(), output = %&s[..s.len().min(200)], "trace_init state");
     }
 
     #[test]
     fn maybe_basic_ready() {
+        init_tracing();
         let path = "disasm/orig/basic.bin";
         if std::path::Path::new(path).exists() {
             let mut h = BasicHarness::new();

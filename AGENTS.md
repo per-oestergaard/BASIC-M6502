@@ -30,6 +30,7 @@ The overall approach I want to take is -
 - Add `tracing-subscriber = { version = "0.3", features = ["env-filter"] }` to binaries that need to print traces.
 - Initialise the subscriber in `main()` with `tracing_subscriber::fmt().with_env_filter(EnvFilter::from_default_env()).init()`.
 - Emit `trace!` calls (target `emu6502::cpu`, `assembler6502::preprocess`, etc.) at every meaningful decision point.
+- Keep repo-wide standing rules like this in `AGENTS.md`; repo memory is agent-only scratch context and is not part of the checked-in repository.
 - **Do NOT use grep/sed/awk/od on source or binary files for diagnosis.**. Read the files directly or run the code with `RUST_LOG=trace` (or a targeted filter) and read the trace output instead.
 - **Do NOT use grep/sed when examining output from cargo**, just redirect the output to a file in ./temp and look at the file instead of grep/sed. Use `RUST_LOG=trace` (or a targeted filter)
 

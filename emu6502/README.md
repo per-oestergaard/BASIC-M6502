@@ -36,6 +36,11 @@ Run tests:
 cargo test -p emu6502
 ```
 
+Run one of the checked-in BASIC sample programs through the emulator harness:
+```
+cargo run -p emu6502 --example run_basic -- for_loop
+```
+
 ## Integrating a BASIC Binary
 1. Place original binary at `disasm/orig/basic.bin`.
 2. Run `cargo test -p emu6502 -- --ignored` (future: we may mark long BASIC start tests ignored).
