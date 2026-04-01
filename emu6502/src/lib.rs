@@ -21,7 +21,7 @@ pub const FLAG_N: u8 = 0x80; // Negative
 pub mod opcodes {
     // ── Load ──────────────────────────────────────────────────────────────────
     pub const LDA_IMM: u8 = 0xA9; // LDA #imm
-    pub const LDA_ZP:  u8 = 0xA5; // LDA zp
+    pub const LDA_ZP: u8 = 0xA5; // LDA zp
     pub const LDA_ZPX: u8 = 0xB5; // LDA zp,X
     pub const LDA_ABS: u8 = 0xAD; // LDA abs
     pub const LDA_ABX: u8 = 0xBD; // LDA abs,X
@@ -30,19 +30,19 @@ pub mod opcodes {
     pub const LDA_INY: u8 = 0xB1; // LDA (zp),Y
 
     pub const LDX_IMM: u8 = 0xA2; // LDX #imm
-    pub const LDX_ZP:  u8 = 0xA6; // LDX zp
+    pub const LDX_ZP: u8 = 0xA6; // LDX zp
     pub const LDX_ZPY: u8 = 0xB6; // LDX zp,Y
     pub const LDX_ABS: u8 = 0xAE; // LDX abs
     pub const LDX_ABY: u8 = 0xBE; // LDX abs,Y
 
     pub const LDY_IMM: u8 = 0xA0; // LDY #imm
-    pub const LDY_ZP:  u8 = 0xA4; // LDY zp
+    pub const LDY_ZP: u8 = 0xA4; // LDY zp
     pub const LDY_ZPX: u8 = 0xB4; // LDY zp,X
     pub const LDY_ABS: u8 = 0xAC; // LDY abs
     pub const LDY_ABX: u8 = 0xBC; // LDY abs,X
 
     // ── Store ─────────────────────────────────────────────────────────────────
-    pub const STA_ZP:  u8 = 0x85; // STA zp
+    pub const STA_ZP: u8 = 0x85; // STA zp
     pub const STA_ZPX: u8 = 0x95; // STA zp,X
     pub const STA_ABS: u8 = 0x8D; // STA abs
     pub const STA_ABX: u8 = 0x9D; // STA abs,X
@@ -50,11 +50,11 @@ pub mod opcodes {
     pub const STA_INX: u8 = 0x81; // STA (zp,X)
     pub const STA_INY: u8 = 0x91; // STA (zp),Y
 
-    pub const STX_ZP:  u8 = 0x86; // STX zp
+    pub const STX_ZP: u8 = 0x86; // STX zp
     pub const STX_ZPY: u8 = 0x96; // STX zp,Y
     pub const STX_ABS: u8 = 0x8E; // STX abs
 
-    pub const STY_ZP:  u8 = 0x84; // STY zp
+    pub const STY_ZP: u8 = 0x84; // STY zp
     pub const STY_ZPX: u8 = 0x94; // STY zp,X
     pub const STY_ABS: u8 = 0x8C; // STY abs
 
@@ -72,19 +72,19 @@ pub mod opcodes {
     pub const DEX: u8 = 0xCA;
     pub const DEY: u8 = 0x88;
 
-    pub const INC_ZP:  u8 = 0xE6; // INC zp
+    pub const INC_ZP: u8 = 0xE6; // INC zp
     pub const INC_ZPX: u8 = 0xF6; // INC zp,X
     pub const INC_ABS: u8 = 0xEE; // INC abs
     pub const INC_ABX: u8 = 0xFE; // INC abs,X
 
-    pub const DEC_ZP:  u8 = 0xC6; // DEC zp
+    pub const DEC_ZP: u8 = 0xC6; // DEC zp
     pub const DEC_ZPX: u8 = 0xD6; // DEC zp,X
     pub const DEC_ABS: u8 = 0xCE; // DEC abs
     pub const DEC_ABX: u8 = 0xDE; // DEC abs,X
 
     // ── Arithmetic ────────────────────────────────────────────────────────────
     pub const ADC_IMM: u8 = 0x69;
-    pub const ADC_ZP:  u8 = 0x65;
+    pub const ADC_ZP: u8 = 0x65;
     pub const ADC_ZPX: u8 = 0x75;
     pub const ADC_ABS: u8 = 0x6D;
     pub const ADC_ABX: u8 = 0x7D;
@@ -92,9 +92,9 @@ pub mod opcodes {
     pub const ADC_INX: u8 = 0x61;
     pub const ADC_INY: u8 = 0x71;
 
-    pub const SBC_IMM:     u8 = 0xE9;
+    pub const SBC_IMM: u8 = 0xE9;
     pub const SBC_IMM_ALT: u8 = 0xEB; // undocumented alias
-    pub const SBC_ZP:  u8 = 0xE5;
+    pub const SBC_ZP: u8 = 0xE5;
     pub const SBC_ZPX: u8 = 0xF5;
     pub const SBC_ABS: u8 = 0xED;
     pub const SBC_ABX: u8 = 0xFD;
@@ -104,7 +104,7 @@ pub mod opcodes {
 
     // ── Logic ─────────────────────────────────────────────────────────────────
     pub const AND_IMM: u8 = 0x29;
-    pub const AND_ZP:  u8 = 0x25;
+    pub const AND_ZP: u8 = 0x25;
     pub const AND_ZPX: u8 = 0x35;
     pub const AND_ABS: u8 = 0x2D;
     pub const AND_ABX: u8 = 0x3D;
@@ -113,7 +113,7 @@ pub mod opcodes {
     pub const AND_INY: u8 = 0x31;
 
     pub const ORA_IMM: u8 = 0x09;
-    pub const ORA_ZP:  u8 = 0x05;
+    pub const ORA_ZP: u8 = 0x05;
     pub const ORA_ZPX: u8 = 0x15;
     pub const ORA_ABS: u8 = 0x0D;
     pub const ORA_ABX: u8 = 0x1D;
@@ -122,7 +122,7 @@ pub mod opcodes {
     pub const ORA_INY: u8 = 0x11;
 
     pub const EOR_IMM: u8 = 0x49;
-    pub const EOR_ZP:  u8 = 0x45;
+    pub const EOR_ZP: u8 = 0x45;
     pub const EOR_ZPX: u8 = 0x55;
     pub const EOR_ABS: u8 = 0x4D;
     pub const EOR_ABX: u8 = 0x5D;
@@ -130,12 +130,12 @@ pub mod opcodes {
     pub const EOR_INX: u8 = 0x41;
     pub const EOR_INY: u8 = 0x51;
 
-    pub const BIT_ZP:  u8 = 0x24;
+    pub const BIT_ZP: u8 = 0x24;
     pub const BIT_ABS: u8 = 0x2C;
 
     // ── Compare ───────────────────────────────────────────────────────────────
     pub const CMP_IMM: u8 = 0xC9;
-    pub const CMP_ZP:  u8 = 0xC5;
+    pub const CMP_ZP: u8 = 0xC5;
     pub const CMP_ZPX: u8 = 0xD5;
     pub const CMP_ABS: u8 = 0xCD;
     pub const CMP_ABX: u8 = 0xDD;
@@ -144,34 +144,34 @@ pub mod opcodes {
     pub const CMP_INY: u8 = 0xD1;
 
     pub const CPX_IMM: u8 = 0xE0;
-    pub const CPX_ZP:  u8 = 0xE4;
+    pub const CPX_ZP: u8 = 0xE4;
     pub const CPX_ABS: u8 = 0xEC;
 
     pub const CPY_IMM: u8 = 0xC0;
-    pub const CPY_ZP:  u8 = 0xC4;
+    pub const CPY_ZP: u8 = 0xC4;
     pub const CPY_ABS: u8 = 0xCC;
 
     // ── Shifts & Rotates ──────────────────────────────────────────────────────
     pub const ASL_ACC: u8 = 0x0A; // ASL A (accumulator)
-    pub const ASL_ZP:  u8 = 0x06;
+    pub const ASL_ZP: u8 = 0x06;
     pub const ASL_ZPX: u8 = 0x16;
     pub const ASL_ABS: u8 = 0x0E;
     pub const ASL_ABX: u8 = 0x1E;
 
     pub const LSR_ACC: u8 = 0x4A; // LSR A
-    pub const LSR_ZP:  u8 = 0x46;
+    pub const LSR_ZP: u8 = 0x46;
     pub const LSR_ZPX: u8 = 0x56;
     pub const LSR_ABS: u8 = 0x4E;
     pub const LSR_ABX: u8 = 0x5E;
 
     pub const ROL_ACC: u8 = 0x2A; // ROL A
-    pub const ROL_ZP:  u8 = 0x26;
+    pub const ROL_ZP: u8 = 0x26;
     pub const ROL_ZPX: u8 = 0x36;
     pub const ROL_ABS: u8 = 0x2E;
     pub const ROL_ABX: u8 = 0x3E;
 
     pub const ROR_ACC: u8 = 0x6A; // ROR A
-    pub const ROR_ZP:  u8 = 0x66;
+    pub const ROR_ZP: u8 = 0x66;
     pub const ROR_ZPX: u8 = 0x76;
     pub const ROR_ABS: u8 = 0x6E;
     pub const ROR_ABX: u8 = 0x7E;
@@ -189,9 +189,9 @@ pub mod opcodes {
     // ── Jumps & Calls ─────────────────────────────────────────────────────────
     pub const JMP_ABS: u8 = 0x4C; // JMP abs
     pub const JMP_IND: u8 = 0x6C; // JMP (abs)
-    pub const JSR:     u8 = 0x20; // Jump to SubRoutine
-    pub const RTS:     u8 = 0x60; // ReTurn from Subroutine
-    pub const RTI:     u8 = 0x40; // ReTurn from Interrupt
+    pub const JSR: u8 = 0x20; // Jump to SubRoutine
+    pub const RTS: u8 = 0x60; // ReTurn from Subroutine
+    pub const RTI: u8 = 0x40; // ReTurn from Interrupt
 
     // ── Stack ─────────────────────────────────────────────────────────────────
     pub const PHA: u8 = 0x48; // PusH Accumulator
@@ -219,62 +219,157 @@ pub use opcodes::*;
 pub fn opcode_name(op: u8) -> &'static str {
     use opcodes::*;
     match op {
-        LDA_IMM => "LDA #",       LDA_ZP  => "LDA zp",     LDA_ZPX => "LDA zp,X",
-        LDA_ABS => "LDA abs",     LDA_ABX => "LDA abs,X",  LDA_ABY => "LDA abs,Y",
-        LDA_INX => "LDA (zp,X)",  LDA_INY => "LDA (zp),Y",
-        LDX_IMM => "LDX #",       LDX_ZP  => "LDX zp",     LDX_ZPY => "LDX zp,Y",
-        LDX_ABS => "LDX abs",     LDX_ABY => "LDX abs,Y",
-        LDY_IMM => "LDY #",       LDY_ZP  => "LDY zp",     LDY_ZPX => "LDY zp,X",
-        LDY_ABS => "LDY abs",     LDY_ABX => "LDY abs,X",
-        STA_ZP  => "STA zp",      STA_ZPX => "STA zp,X",   STA_ABS => "STA abs",
-        STA_ABX => "STA abs,X",   STA_ABY => "STA abs,Y",
-        STA_INX => "STA (zp,X)",  STA_INY => "STA (zp),Y",
-        STX_ZP  => "STX zp",      STX_ZPY => "STX zp,Y",   STX_ABS => "STX abs",
-        STY_ZP  => "STY zp",      STY_ZPX => "STY zp,X",   STY_ABS => "STY abs",
-        TAX => "TAX", TXA => "TXA", TAY => "TAY", TYA => "TYA", TSX => "TSX", TXS => "TXS",
-        INX => "INX", INY => "INY", DEX => "DEX", DEY => "DEY",
-        INC_ZP  => "INC zp",   INC_ZPX => "INC zp,X",
-        INC_ABS => "INC abs",  INC_ABX => "INC abs,X",
-        DEC_ZP  => "DEC zp",   DEC_ZPX => "DEC zp,X",
-        DEC_ABS => "DEC abs",  DEC_ABX => "DEC abs,X",
-        ADC_IMM => "ADC #",    ADC_ZP  => "ADC zp",    ADC_ZPX => "ADC zp,X",
-        ADC_ABS => "ADC abs",  ADC_ABX => "ADC abs,X", ADC_ABY => "ADC abs,Y",
-        ADC_INX => "ADC (zp,X)", ADC_INY => "ADC (zp),Y",
+        LDA_IMM => "LDA #",
+        LDA_ZP => "LDA zp",
+        LDA_ZPX => "LDA zp,X",
+        LDA_ABS => "LDA abs",
+        LDA_ABX => "LDA abs,X",
+        LDA_ABY => "LDA abs,Y",
+        LDA_INX => "LDA (zp,X)",
+        LDA_INY => "LDA (zp),Y",
+        LDX_IMM => "LDX #",
+        LDX_ZP => "LDX zp",
+        LDX_ZPY => "LDX zp,Y",
+        LDX_ABS => "LDX abs",
+        LDX_ABY => "LDX abs,Y",
+        LDY_IMM => "LDY #",
+        LDY_ZP => "LDY zp",
+        LDY_ZPX => "LDY zp,X",
+        LDY_ABS => "LDY abs",
+        LDY_ABX => "LDY abs,X",
+        STA_ZP => "STA zp",
+        STA_ZPX => "STA zp,X",
+        STA_ABS => "STA abs",
+        STA_ABX => "STA abs,X",
+        STA_ABY => "STA abs,Y",
+        STA_INX => "STA (zp,X)",
+        STA_INY => "STA (zp),Y",
+        STX_ZP => "STX zp",
+        STX_ZPY => "STX zp,Y",
+        STX_ABS => "STX abs",
+        STY_ZP => "STY zp",
+        STY_ZPX => "STY zp,X",
+        STY_ABS => "STY abs",
+        TAX => "TAX",
+        TXA => "TXA",
+        TAY => "TAY",
+        TYA => "TYA",
+        TSX => "TSX",
+        TXS => "TXS",
+        INX => "INX",
+        INY => "INY",
+        DEX => "DEX",
+        DEY => "DEY",
+        INC_ZP => "INC zp",
+        INC_ZPX => "INC zp,X",
+        INC_ABS => "INC abs",
+        INC_ABX => "INC abs,X",
+        DEC_ZP => "DEC zp",
+        DEC_ZPX => "DEC zp,X",
+        DEC_ABS => "DEC abs",
+        DEC_ABX => "DEC abs,X",
+        ADC_IMM => "ADC #",
+        ADC_ZP => "ADC zp",
+        ADC_ZPX => "ADC zp,X",
+        ADC_ABS => "ADC abs",
+        ADC_ABX => "ADC abs,X",
+        ADC_ABY => "ADC abs,Y",
+        ADC_INX => "ADC (zp,X)",
+        ADC_INY => "ADC (zp),Y",
         SBC_IMM | SBC_IMM_ALT => "SBC #",
-        SBC_ZP  => "SBC zp",   SBC_ZPX => "SBC zp,X",
-        SBC_ABS => "SBC abs",  SBC_ABX => "SBC abs,X", SBC_ABY => "SBC abs,Y",
-        SBC_INX => "SBC (zp,X)", SBC_INY => "SBC (zp),Y",
-        AND_IMM => "AND #",    AND_ZP  => "AND zp",    AND_ZPX => "AND zp,X",
-        AND_ABS => "AND abs",  AND_ABX => "AND abs,X", AND_ABY => "AND abs,Y",
-        AND_INX => "AND (zp,X)", AND_INY => "AND (zp),Y",
-        ORA_IMM => "ORA #",    ORA_ZP  => "ORA zp",    ORA_ZPX => "ORA zp,X",
-        ORA_ABS => "ORA abs",  ORA_ABX => "ORA abs,X", ORA_ABY => "ORA abs,Y",
-        ORA_INX => "ORA (zp,X)", ORA_INY => "ORA (zp),Y",
-        EOR_IMM => "EOR #",    EOR_ZP  => "EOR zp",    EOR_ZPX => "EOR zp,X",
-        EOR_ABS => "EOR abs",  EOR_ABX => "EOR abs,X", EOR_ABY => "EOR abs,Y",
-        EOR_INX => "EOR (zp,X)", EOR_INY => "EOR (zp),Y",
-        BIT_ZP  => "BIT zp",   BIT_ABS => "BIT abs",
-        CMP_IMM => "CMP #",    CMP_ZP  => "CMP zp",    CMP_ZPX => "CMP zp,X",
-        CMP_ABS => "CMP abs",  CMP_ABX => "CMP abs,X", CMP_ABY => "CMP abs,Y",
-        CMP_INX => "CMP (zp,X)", CMP_INY => "CMP (zp),Y",
-        CPX_IMM => "CPX #",    CPX_ZP  => "CPX zp",    CPX_ABS => "CPX abs",
-        CPY_IMM => "CPY #",    CPY_ZP  => "CPY zp",    CPY_ABS => "CPY abs",
-        ASL_ACC => "ASL A",    ASL_ZP  => "ASL zp",    ASL_ZPX => "ASL zp,X",
-        ASL_ABS => "ASL abs",  ASL_ABX => "ASL abs,X",
-        LSR_ACC => "LSR A",    LSR_ZP  => "LSR zp",    LSR_ZPX => "LSR zp,X",
-        LSR_ABS => "LSR abs",  LSR_ABX => "LSR abs,X",
-        ROL_ACC => "ROL A",    ROL_ZP  => "ROL zp",    ROL_ZPX => "ROL zp,X",
-        ROL_ABS => "ROL abs",  ROL_ABX => "ROL abs,X",
-        ROR_ACC => "ROR A",    ROR_ZP  => "ROR zp",    ROR_ZPX => "ROR zp,X",
-        ROR_ABS => "ROR abs",  ROR_ABX => "ROR abs,X",
-        BPL => "BPL", BMI => "BMI", BVC => "BVC", BVS => "BVS",
-        BCC => "BCC", BCS => "BCS", BNE => "BNE", BEQ => "BEQ",
-        JMP_ABS => "JMP abs",  JMP_IND => "JMP (abs)",
-        JSR => "JSR", RTS => "RTS", RTI => "RTI",
-        PHA => "PHA", PLA => "PLA", PHP => "PHP", PLP => "PLP",
-        CLC => "CLC", SEC => "SEC", CLI => "CLI", SEI => "SEI",
-        CLV => "CLV", CLD => "CLD", SED => "SED",
-        BRK => "BRK", NOP => "NOP",
+        SBC_ZP => "SBC zp",
+        SBC_ZPX => "SBC zp,X",
+        SBC_ABS => "SBC abs",
+        SBC_ABX => "SBC abs,X",
+        SBC_ABY => "SBC abs,Y",
+        SBC_INX => "SBC (zp,X)",
+        SBC_INY => "SBC (zp),Y",
+        AND_IMM => "AND #",
+        AND_ZP => "AND zp",
+        AND_ZPX => "AND zp,X",
+        AND_ABS => "AND abs",
+        AND_ABX => "AND abs,X",
+        AND_ABY => "AND abs,Y",
+        AND_INX => "AND (zp,X)",
+        AND_INY => "AND (zp),Y",
+        ORA_IMM => "ORA #",
+        ORA_ZP => "ORA zp",
+        ORA_ZPX => "ORA zp,X",
+        ORA_ABS => "ORA abs",
+        ORA_ABX => "ORA abs,X",
+        ORA_ABY => "ORA abs,Y",
+        ORA_INX => "ORA (zp,X)",
+        ORA_INY => "ORA (zp),Y",
+        EOR_IMM => "EOR #",
+        EOR_ZP => "EOR zp",
+        EOR_ZPX => "EOR zp,X",
+        EOR_ABS => "EOR abs",
+        EOR_ABX => "EOR abs,X",
+        EOR_ABY => "EOR abs,Y",
+        EOR_INX => "EOR (zp,X)",
+        EOR_INY => "EOR (zp),Y",
+        BIT_ZP => "BIT zp",
+        BIT_ABS => "BIT abs",
+        CMP_IMM => "CMP #",
+        CMP_ZP => "CMP zp",
+        CMP_ZPX => "CMP zp,X",
+        CMP_ABS => "CMP abs",
+        CMP_ABX => "CMP abs,X",
+        CMP_ABY => "CMP abs,Y",
+        CMP_INX => "CMP (zp,X)",
+        CMP_INY => "CMP (zp),Y",
+        CPX_IMM => "CPX #",
+        CPX_ZP => "CPX zp",
+        CPX_ABS => "CPX abs",
+        CPY_IMM => "CPY #",
+        CPY_ZP => "CPY zp",
+        CPY_ABS => "CPY abs",
+        ASL_ACC => "ASL A",
+        ASL_ZP => "ASL zp",
+        ASL_ZPX => "ASL zp,X",
+        ASL_ABS => "ASL abs",
+        ASL_ABX => "ASL abs,X",
+        LSR_ACC => "LSR A",
+        LSR_ZP => "LSR zp",
+        LSR_ZPX => "LSR zp,X",
+        LSR_ABS => "LSR abs",
+        LSR_ABX => "LSR abs,X",
+        ROL_ACC => "ROL A",
+        ROL_ZP => "ROL zp",
+        ROL_ZPX => "ROL zp,X",
+        ROL_ABS => "ROL abs",
+        ROL_ABX => "ROL abs,X",
+        ROR_ACC => "ROR A",
+        ROR_ZP => "ROR zp",
+        ROR_ZPX => "ROR zp,X",
+        ROR_ABS => "ROR abs",
+        ROR_ABX => "ROR abs,X",
+        BPL => "BPL",
+        BMI => "BMI",
+        BVC => "BVC",
+        BVS => "BVS",
+        BCC => "BCC",
+        BCS => "BCS",
+        BNE => "BNE",
+        BEQ => "BEQ",
+        JMP_ABS => "JMP abs",
+        JMP_IND => "JMP (abs)",
+        JSR => "JSR",
+        RTS => "RTS",
+        RTI => "RTI",
+        PHA => "PHA",
+        PLA => "PLA",
+        PHP => "PHP",
+        PLP => "PLP",
+        CLC => "CLC",
+        SEC => "SEC",
+        CLI => "CLI",
+        SEI => "SEI",
+        CLV => "CLV",
+        CLD => "CLD",
+        SED => "SED",
+        BRK => "BRK",
+        NOP => "NOP",
         _ => "???",
     }
 }
@@ -444,326 +539,850 @@ impl Cpu {
         let mut extra_cycles = 0u8;
         match op {
             // ── Load / Store ──────────────────────────────────────────────────
-            LDA_IMM => { let v = self.imm();  self.a = v; self.nz(v); }
-            LDA_ZP  => { let a = self.zp();   let v = self.read(a); self.a = v; self.nz(v); }
-            LDA_ZPX => { let a = self.zpx();  let v = self.read(a); self.a = v; self.nz(v); }
-            LDA_ABS => { let a = self.abs();  let v = self.read(a); self.a = v; self.nz(v); }
+            LDA_IMM => {
+                let v = self.imm();
+                self.a = v;
+                self.nz(v);
+            }
+            LDA_ZP => {
+                let a = self.zp();
+                let v = self.read(a);
+                self.a = v;
+                self.nz(v);
+            }
+            LDA_ZPX => {
+                let a = self.zpx();
+                let v = self.read(a);
+                self.a = v;
+                self.nz(v);
+            }
+            LDA_ABS => {
+                let a = self.abs();
+                let v = self.read(a);
+                self.a = v;
+                self.nz(v);
+            }
             LDA_ABX => {
-                let (a, pc) = self.absx_pc(); if pc { extra_cycles += 1; }
-                let v = self.read(a); self.a = v; self.nz(v);
+                let (a, pc) = self.absx_pc();
+                if pc {
+                    extra_cycles += 1;
+                }
+                let v = self.read(a);
+                self.a = v;
+                self.nz(v);
             }
             LDA_ABY => {
-                let (a, pc) = self.absy_pc(); if pc { extra_cycles += 1; }
-                let v = self.read(a); self.a = v; self.nz(v);
+                let (a, pc) = self.absy_pc();
+                if pc {
+                    extra_cycles += 1;
+                }
+                let v = self.read(a);
+                self.a = v;
+                self.nz(v);
             }
-            LDA_INX => { let a = self.indx(); let v = self.read(a); self.a = v; self.nz(v); }
-            LDA_INY => { let a = self.indy(); let v = self.read(a); self.a = v; self.nz(v); }
+            LDA_INX => {
+                let a = self.indx();
+                let v = self.read(a);
+                self.a = v;
+                self.nz(v);
+            }
+            LDA_INY => {
+                let a = self.indy();
+                let v = self.read(a);
+                self.a = v;
+                self.nz(v);
+            }
 
-            LDX_IMM => { let v = self.imm();  self.x = v; self.nz(v); }
-            LDX_ZP  => { let a = self.zp();   let v = self.read(a); self.x = v; self.nz(v); }
-            LDX_ZPY => { let a = self.zpy();  let v = self.read(a); self.x = v; self.nz(v); }
-            LDX_ABS => { let a = self.abs();  let v = self.read(a); self.x = v; self.nz(v); }
+            LDX_IMM => {
+                let v = self.imm();
+                self.x = v;
+                self.nz(v);
+            }
+            LDX_ZP => {
+                let a = self.zp();
+                let v = self.read(a);
+                self.x = v;
+                self.nz(v);
+            }
+            LDX_ZPY => {
+                let a = self.zpy();
+                let v = self.read(a);
+                self.x = v;
+                self.nz(v);
+            }
+            LDX_ABS => {
+                let a = self.abs();
+                let v = self.read(a);
+                self.x = v;
+                self.nz(v);
+            }
             LDX_ABY => {
-                let (a, pc) = self.absy_pc(); if pc { extra_cycles += 1; }
-                let v = self.read(a); self.x = v; self.nz(v);
+                let (a, pc) = self.absy_pc();
+                if pc {
+                    extra_cycles += 1;
+                }
+                let v = self.read(a);
+                self.x = v;
+                self.nz(v);
             }
 
-            LDY_IMM => { let v = self.imm();  self.y = v; self.nz(v); }
-            LDY_ZP  => { let a = self.zp();   let v = self.read(a); self.y = v; self.nz(v); }
-            LDY_ZPX => { let a = self.zpx();  let v = self.read(a); self.y = v; self.nz(v); }
-            LDY_ABS => { let a = self.abs();  let v = self.read(a); self.y = v; self.nz(v); }
+            LDY_IMM => {
+                let v = self.imm();
+                self.y = v;
+                self.nz(v);
+            }
+            LDY_ZP => {
+                let a = self.zp();
+                let v = self.read(a);
+                self.y = v;
+                self.nz(v);
+            }
+            LDY_ZPX => {
+                let a = self.zpx();
+                let v = self.read(a);
+                self.y = v;
+                self.nz(v);
+            }
+            LDY_ABS => {
+                let a = self.abs();
+                let v = self.read(a);
+                self.y = v;
+                self.nz(v);
+            }
             LDY_ABX => {
-                let (a, pc) = self.absx_pc(); if pc { extra_cycles += 1; }
-                let v = self.read(a); self.y = v; self.nz(v);
+                let (a, pc) = self.absx_pc();
+                if pc {
+                    extra_cycles += 1;
+                }
+                let v = self.read(a);
+                self.y = v;
+                self.nz(v);
             }
 
-            STA_ZP  => { let a = self.zp();   self.write(a, self.a); }
-            STA_ZPX => { let a = self.zpx();  self.write(a, self.a); }
-            STA_ABS => { let a = self.abs();  self.write(a, self.a); }
-            STA_ABX => { let a = self.absx(); self.write(a, self.a); }
-            STA_ABY => { let a = self.absy(); self.write(a, self.a); }
-            STA_INX => { let a = self.indx(); self.write(a, self.a); }
-            STA_INY => { let a = self.indy(); self.write(a, self.a); }
+            STA_ZP => {
+                let a = self.zp();
+                self.write(a, self.a);
+            }
+            STA_ZPX => {
+                let a = self.zpx();
+                self.write(a, self.a);
+            }
+            STA_ABS => {
+                let a = self.abs();
+                self.write(a, self.a);
+            }
+            STA_ABX => {
+                let a = self.absx();
+                self.write(a, self.a);
+            }
+            STA_ABY => {
+                let a = self.absy();
+                self.write(a, self.a);
+            }
+            STA_INX => {
+                let a = self.indx();
+                self.write(a, self.a);
+            }
+            STA_INY => {
+                let a = self.indy();
+                self.write(a, self.a);
+            }
 
-            STX_ZP  => { let a = self.zp();   self.write(a, self.x); }
-            STX_ZPY => { let a = self.zpy();  self.write(a, self.x); }
-            STX_ABS => { let a = self.abs();  self.write(a, self.x); }
+            STX_ZP => {
+                let a = self.zp();
+                self.write(a, self.x);
+            }
+            STX_ZPY => {
+                let a = self.zpy();
+                self.write(a, self.x);
+            }
+            STX_ABS => {
+                let a = self.abs();
+                self.write(a, self.x);
+            }
 
-            STY_ZP  => { let a = self.zp();   self.write(a, self.y); }
-            STY_ZPX => { let a = self.zpx();  self.write(a, self.y); }
-            STY_ABS => { let a = self.abs();  self.write(a, self.y); }
+            STY_ZP => {
+                let a = self.zp();
+                self.write(a, self.y);
+            }
+            STY_ZPX => {
+                let a = self.zpx();
+                self.write(a, self.y);
+            }
+            STY_ABS => {
+                let a = self.abs();
+                self.write(a, self.y);
+            }
 
             // ── Transfers ─────────────────────────────────────────────────────
-            TAX => { self.x = self.a; self.nz(self.x); }
-            TXA => { self.a = self.x; self.nz(self.a); }
-            TAY => { self.y = self.a; self.nz(self.y); }
-            TYA => { self.a = self.y; self.nz(self.a); }
-            TSX => { self.x = self.sp; self.nz(self.x); }
-            TXS => { self.sp = self.x; }
+            TAX => {
+                self.x = self.a;
+                self.nz(self.x);
+            }
+            TXA => {
+                self.a = self.x;
+                self.nz(self.a);
+            }
+            TAY => {
+                self.y = self.a;
+                self.nz(self.y);
+            }
+            TYA => {
+                self.a = self.y;
+                self.nz(self.a);
+            }
+            TSX => {
+                self.x = self.sp;
+                self.nz(self.x);
+            }
+            TXS => {
+                self.sp = self.x;
+            }
 
             // ── Increments / Decrements ───────────────────────────────────────
-            INX => { self.x = self.x.wrapping_add(1); self.nz(self.x); }
-            INY => { self.y = self.y.wrapping_add(1); self.nz(self.y); }
-            DEX => { self.x = self.x.wrapping_sub(1); self.nz(self.x); }
-            DEY => { self.y = self.y.wrapping_sub(1); self.nz(self.y); }
+            INX => {
+                self.x = self.x.wrapping_add(1);
+                self.nz(self.x);
+            }
+            INY => {
+                self.y = self.y.wrapping_add(1);
+                self.nz(self.y);
+            }
+            DEX => {
+                self.x = self.x.wrapping_sub(1);
+                self.nz(self.x);
+            }
+            DEY => {
+                self.y = self.y.wrapping_sub(1);
+                self.nz(self.y);
+            }
 
-            INC_ZP  => { let a = self.zp();   let v = self.read(a).wrapping_add(1); self.write(a, v); self.nz(v); }
-            INC_ZPX => { let a = self.zpx();  let v = self.read(a).wrapping_add(1); self.write(a, v); self.nz(v); }
-            INC_ABS => { let a = self.abs();  let v = self.read(a).wrapping_add(1); self.write(a, v); self.nz(v); }
-            INC_ABX => { let a = self.absx(); let v = self.read(a).wrapping_add(1); self.write(a, v); self.nz(v); }
+            INC_ZP => {
+                let a = self.zp();
+                let v = self.read(a).wrapping_add(1);
+                self.write(a, v);
+                self.nz(v);
+            }
+            INC_ZPX => {
+                let a = self.zpx();
+                let v = self.read(a).wrapping_add(1);
+                self.write(a, v);
+                self.nz(v);
+            }
+            INC_ABS => {
+                let a = self.abs();
+                let v = self.read(a).wrapping_add(1);
+                self.write(a, v);
+                self.nz(v);
+            }
+            INC_ABX => {
+                let a = self.absx();
+                let v = self.read(a).wrapping_add(1);
+                self.write(a, v);
+                self.nz(v);
+            }
 
-            DEC_ZP  => { let a = self.zp();   let v = self.read(a).wrapping_sub(1); self.write(a, v); self.nz(v); }
-            DEC_ZPX => { let a = self.zpx();  let v = self.read(a).wrapping_sub(1); self.write(a, v); self.nz(v); }
-            DEC_ABS => { let a = self.abs();  let v = self.read(a).wrapping_sub(1); self.write(a, v); self.nz(v); }
-            DEC_ABX => { let a = self.absx(); let v = self.read(a).wrapping_sub(1); self.write(a, v); self.nz(v); }
+            DEC_ZP => {
+                let a = self.zp();
+                let v = self.read(a).wrapping_sub(1);
+                self.write(a, v);
+                self.nz(v);
+            }
+            DEC_ZPX => {
+                let a = self.zpx();
+                let v = self.read(a).wrapping_sub(1);
+                self.write(a, v);
+                self.nz(v);
+            }
+            DEC_ABS => {
+                let a = self.abs();
+                let v = self.read(a).wrapping_sub(1);
+                self.write(a, v);
+                self.nz(v);
+            }
+            DEC_ABX => {
+                let a = self.absx();
+                let v = self.read(a).wrapping_sub(1);
+                self.write(a, v);
+                self.nz(v);
+            }
 
             // ── Arithmetic ────────────────────────────────────────────────────
-            ADC_IMM => { let v = self.imm();  self.adc(v); }
-            ADC_ZP  => { let a = self.zp();   let v = self.read(a); self.adc(v); }
-            ADC_ZPX => { let a = self.zpx();  let v = self.read(a); self.adc(v); }
-            ADC_ABS => { let a = self.abs();  let v = self.read(a); self.adc(v); }
+            ADC_IMM => {
+                let v = self.imm();
+                self.adc(v);
+            }
+            ADC_ZP => {
+                let a = self.zp();
+                let v = self.read(a);
+                self.adc(v);
+            }
+            ADC_ZPX => {
+                let a = self.zpx();
+                let v = self.read(a);
+                self.adc(v);
+            }
+            ADC_ABS => {
+                let a = self.abs();
+                let v = self.read(a);
+                self.adc(v);
+            }
             ADC_ABX => {
-                let (a, pc) = self.absx_pc(); if pc { extra_cycles += 1; }
-                let v = self.read(a); self.adc(v);
+                let (a, pc) = self.absx_pc();
+                if pc {
+                    extra_cycles += 1;
+                }
+                let v = self.read(a);
+                self.adc(v);
             }
             ADC_ABY => {
-                let (a, pc) = self.absy_pc(); if pc { extra_cycles += 1; }
-                let v = self.read(a); self.adc(v);
+                let (a, pc) = self.absy_pc();
+                if pc {
+                    extra_cycles += 1;
+                }
+                let v = self.read(a);
+                self.adc(v);
             }
-            ADC_INX => { let a = self.indx(); let v = self.read(a); self.adc(v); }
+            ADC_INX => {
+                let a = self.indx();
+                let v = self.read(a);
+                self.adc(v);
+            }
             ADC_INY => {
-                let (a, pc) = self.indy_pc(); if pc { extra_cycles += 1; }
-                let v = self.read(a); self.adc(v);
+                let (a, pc) = self.indy_pc();
+                if pc {
+                    extra_cycles += 1;
+                }
+                let v = self.read(a);
+                self.adc(v);
             }
 
-            SBC_IMM | SBC_IMM_ALT => { let v = self.imm();  self.sbc(v); }
-            SBC_ZP  => { let a = self.zp();   let v = self.read(a); self.sbc(v); }
-            SBC_ZPX => { let a = self.zpx();  let v = self.read(a); self.sbc(v); }
-            SBC_ABS => { let a = self.abs();  let v = self.read(a); self.sbc(v); }
+            SBC_IMM | SBC_IMM_ALT => {
+                let v = self.imm();
+                self.sbc(v);
+            }
+            SBC_ZP => {
+                let a = self.zp();
+                let v = self.read(a);
+                self.sbc(v);
+            }
+            SBC_ZPX => {
+                let a = self.zpx();
+                let v = self.read(a);
+                self.sbc(v);
+            }
+            SBC_ABS => {
+                let a = self.abs();
+                let v = self.read(a);
+                self.sbc(v);
+            }
             SBC_ABX => {
-                let (a, pc) = self.absx_pc(); if pc { extra_cycles += 1; }
-                let v = self.read(a); self.sbc(v);
+                let (a, pc) = self.absx_pc();
+                if pc {
+                    extra_cycles += 1;
+                }
+                let v = self.read(a);
+                self.sbc(v);
             }
             SBC_ABY => {
-                let (a, pc) = self.absy_pc(); if pc { extra_cycles += 1; }
-                let v = self.read(a); self.sbc(v);
+                let (a, pc) = self.absy_pc();
+                if pc {
+                    extra_cycles += 1;
+                }
+                let v = self.read(a);
+                self.sbc(v);
             }
-            SBC_INX => { let a = self.indx(); let v = self.read(a); self.sbc(v); }
+            SBC_INX => {
+                let a = self.indx();
+                let v = self.read(a);
+                self.sbc(v);
+            }
             SBC_INY => {
-                let (a, pc) = self.indy_pc(); if pc { extra_cycles += 1; }
-                let v = self.read(a); self.sbc(v);
+                let (a, pc) = self.indy_pc();
+                if pc {
+                    extra_cycles += 1;
+                }
+                let v = self.read(a);
+                self.sbc(v);
             }
 
             // ── Logic ─────────────────────────────────────────────────────────
-            AND_IMM => { let v = self.imm();  self.a &= v; self.nz(self.a); }
-            AND_ZP  => { let a = self.zp();   let v = self.read(a); self.a &= v; self.nz(self.a); }
-            AND_ZPX => { let a = self.zpx();  let v = self.read(a); self.a &= v; self.nz(self.a); }
-            AND_ABS => { let a = self.abs();  let v = self.read(a); self.a &= v; self.nz(self.a); }
+            AND_IMM => {
+                let v = self.imm();
+                self.a &= v;
+                self.nz(self.a);
+            }
+            AND_ZP => {
+                let a = self.zp();
+                let v = self.read(a);
+                self.a &= v;
+                self.nz(self.a);
+            }
+            AND_ZPX => {
+                let a = self.zpx();
+                let v = self.read(a);
+                self.a &= v;
+                self.nz(self.a);
+            }
+            AND_ABS => {
+                let a = self.abs();
+                let v = self.read(a);
+                self.a &= v;
+                self.nz(self.a);
+            }
             AND_ABX => {
-                let (a, pc) = self.absx_pc(); if pc { extra_cycles += 1; }
-                let v = self.read(a); self.a &= v; self.nz(self.a);
+                let (a, pc) = self.absx_pc();
+                if pc {
+                    extra_cycles += 1;
+                }
+                let v = self.read(a);
+                self.a &= v;
+                self.nz(self.a);
             }
             AND_ABY => {
-                let (a, pc) = self.absy_pc(); if pc { extra_cycles += 1; }
-                let v = self.read(a); self.a &= v; self.nz(self.a);
+                let (a, pc) = self.absy_pc();
+                if pc {
+                    extra_cycles += 1;
+                }
+                let v = self.read(a);
+                self.a &= v;
+                self.nz(self.a);
             }
-            AND_INX => { let a = self.indx(); let v = self.read(a); self.a &= v; self.nz(self.a); }
+            AND_INX => {
+                let a = self.indx();
+                let v = self.read(a);
+                self.a &= v;
+                self.nz(self.a);
+            }
             AND_INY => {
-                let (a, pc) = self.indy_pc(); if pc { extra_cycles += 1; }
-                let v = self.read(a); self.a &= v; self.nz(self.a);
+                let (a, pc) = self.indy_pc();
+                if pc {
+                    extra_cycles += 1;
+                }
+                let v = self.read(a);
+                self.a &= v;
+                self.nz(self.a);
             }
 
-            ORA_IMM => { let v = self.imm();  self.a |= v; self.nz(self.a); }
-            ORA_ZP  => { let a = self.zp();   let v = self.read(a); self.a |= v; self.nz(self.a); }
-            ORA_ZPX => { let a = self.zpx();  let v = self.read(a); self.a |= v; self.nz(self.a); }
-            ORA_ABS => { let a = self.abs();  let v = self.read(a); self.a |= v; self.nz(self.a); }
+            ORA_IMM => {
+                let v = self.imm();
+                self.a |= v;
+                self.nz(self.a);
+            }
+            ORA_ZP => {
+                let a = self.zp();
+                let v = self.read(a);
+                self.a |= v;
+                self.nz(self.a);
+            }
+            ORA_ZPX => {
+                let a = self.zpx();
+                let v = self.read(a);
+                self.a |= v;
+                self.nz(self.a);
+            }
+            ORA_ABS => {
+                let a = self.abs();
+                let v = self.read(a);
+                self.a |= v;
+                self.nz(self.a);
+            }
             ORA_ABX => {
-                let (a, pc) = self.absx_pc(); if pc { extra_cycles += 1; }
-                let v = self.read(a); self.a |= v; self.nz(self.a);
+                let (a, pc) = self.absx_pc();
+                if pc {
+                    extra_cycles += 1;
+                }
+                let v = self.read(a);
+                self.a |= v;
+                self.nz(self.a);
             }
             ORA_ABY => {
-                let (a, pc) = self.absy_pc(); if pc { extra_cycles += 1; }
-                let v = self.read(a); self.a |= v; self.nz(self.a);
+                let (a, pc) = self.absy_pc();
+                if pc {
+                    extra_cycles += 1;
+                }
+                let v = self.read(a);
+                self.a |= v;
+                self.nz(self.a);
             }
-            ORA_INX => { let a = self.indx(); let v = self.read(a); self.a |= v; self.nz(self.a); }
+            ORA_INX => {
+                let a = self.indx();
+                let v = self.read(a);
+                self.a |= v;
+                self.nz(self.a);
+            }
             ORA_INY => {
-                let (a, pc) = self.indy_pc(); if pc { extra_cycles += 1; }
-                let v = self.read(a); self.a |= v; self.nz(self.a);
+                let (a, pc) = self.indy_pc();
+                if pc {
+                    extra_cycles += 1;
+                }
+                let v = self.read(a);
+                self.a |= v;
+                self.nz(self.a);
             }
 
-            EOR_IMM => { let v = self.imm();  self.a ^= v; self.nz(self.a); }
-            EOR_ZP  => { let a = self.zp();   let v = self.read(a); self.a ^= v; self.nz(self.a); }
-            EOR_ZPX => { let a = self.zpx();  let v = self.read(a); self.a ^= v; self.nz(self.a); }
-            EOR_ABS => { let a = self.abs();  let v = self.read(a); self.a ^= v; self.nz(self.a); }
+            EOR_IMM => {
+                let v = self.imm();
+                self.a ^= v;
+                self.nz(self.a);
+            }
+            EOR_ZP => {
+                let a = self.zp();
+                let v = self.read(a);
+                self.a ^= v;
+                self.nz(self.a);
+            }
+            EOR_ZPX => {
+                let a = self.zpx();
+                let v = self.read(a);
+                self.a ^= v;
+                self.nz(self.a);
+            }
+            EOR_ABS => {
+                let a = self.abs();
+                let v = self.read(a);
+                self.a ^= v;
+                self.nz(self.a);
+            }
             EOR_ABX => {
-                let (a, pc) = self.absx_pc(); if pc { extra_cycles += 1; }
-                let v = self.read(a); self.a ^= v; self.nz(self.a);
+                let (a, pc) = self.absx_pc();
+                if pc {
+                    extra_cycles += 1;
+                }
+                let v = self.read(a);
+                self.a ^= v;
+                self.nz(self.a);
             }
             EOR_ABY => {
-                let (a, pc) = self.absy_pc(); if pc { extra_cycles += 1; }
-                let v = self.read(a); self.a ^= v; self.nz(self.a);
+                let (a, pc) = self.absy_pc();
+                if pc {
+                    extra_cycles += 1;
+                }
+                let v = self.read(a);
+                self.a ^= v;
+                self.nz(self.a);
             }
-            EOR_INX => { let a = self.indx(); let v = self.read(a); self.a ^= v; self.nz(self.a); }
+            EOR_INX => {
+                let a = self.indx();
+                let v = self.read(a);
+                self.a ^= v;
+                self.nz(self.a);
+            }
             EOR_INY => {
-                let (a, pc) = self.indy_pc(); if pc { extra_cycles += 1; }
-                let v = self.read(a); self.a ^= v; self.nz(self.a);
+                let (a, pc) = self.indy_pc();
+                if pc {
+                    extra_cycles += 1;
+                }
+                let v = self.read(a);
+                self.a ^= v;
+                self.nz(self.a);
             }
 
-            BIT_ZP  => { let a = self.zp();  let v = self.read(a); self.bit(v); }
-            BIT_ABS => { let a = self.abs(); let v = self.read(a); self.bit(v); }
+            BIT_ZP => {
+                let a = self.zp();
+                let v = self.read(a);
+                self.bit(v);
+            }
+            BIT_ABS => {
+                let a = self.abs();
+                let v = self.read(a);
+                self.bit(v);
+            }
 
             // ── Compare ───────────────────────────────────────────────────────
-            CMP_IMM => { let v = self.imm();  self.cmp(self.a, v); }
-            CMP_ZP  => { let a = self.zp();   let v = self.read(a); self.cmp(self.a, v); }
-            CMP_ZPX => { let a = self.zpx();  let v = self.read(a); self.cmp(self.a, v); }
-            CMP_ABS => { let a = self.abs();  let v = self.read(a); self.cmp(self.a, v); }
+            CMP_IMM => {
+                let v = self.imm();
+                self.cmp(self.a, v);
+            }
+            CMP_ZP => {
+                let a = self.zp();
+                let v = self.read(a);
+                self.cmp(self.a, v);
+            }
+            CMP_ZPX => {
+                let a = self.zpx();
+                let v = self.read(a);
+                self.cmp(self.a, v);
+            }
+            CMP_ABS => {
+                let a = self.abs();
+                let v = self.read(a);
+                self.cmp(self.a, v);
+            }
             CMP_ABX => {
-                let (a, pc) = self.absx_pc(); if pc { extra_cycles += 1; }
-                let v = self.read(a); self.cmp(self.a, v);
+                let (a, pc) = self.absx_pc();
+                if pc {
+                    extra_cycles += 1;
+                }
+                let v = self.read(a);
+                self.cmp(self.a, v);
             }
             CMP_ABY => {
-                let (a, pc) = self.absy_pc(); if pc { extra_cycles += 1; }
-                let v = self.read(a); self.cmp(self.a, v);
+                let (a, pc) = self.absy_pc();
+                if pc {
+                    extra_cycles += 1;
+                }
+                let v = self.read(a);
+                self.cmp(self.a, v);
             }
-            CMP_INX => { let a = self.indx(); let v = self.read(a); self.cmp(self.a, v); }
+            CMP_INX => {
+                let a = self.indx();
+                let v = self.read(a);
+                self.cmp(self.a, v);
+            }
             CMP_INY => {
-                let (a, pc) = self.indy_pc(); if pc { extra_cycles += 1; }
-                let v = self.read(a); self.cmp(self.a, v);
+                let (a, pc) = self.indy_pc();
+                if pc {
+                    extra_cycles += 1;
+                }
+                let v = self.read(a);
+                self.cmp(self.a, v);
             }
 
-            CPX_IMM => { let v = self.imm(); self.cmp(self.x, v); }
-            CPX_ZP  => { let a = self.zp();  let v = self.read(a); self.cmp(self.x, v); }
-            CPX_ABS => { let a = self.abs(); let v = self.read(a); self.cmp(self.x, v); }
+            CPX_IMM => {
+                let v = self.imm();
+                self.cmp(self.x, v);
+            }
+            CPX_ZP => {
+                let a = self.zp();
+                let v = self.read(a);
+                self.cmp(self.x, v);
+            }
+            CPX_ABS => {
+                let a = self.abs();
+                let v = self.read(a);
+                self.cmp(self.x, v);
+            }
 
-            CPY_IMM => { let v = self.imm(); self.cmp(self.y, v); }
-            CPY_ZP  => { let a = self.zp();  let v = self.read(a); self.cmp(self.y, v); }
-            CPY_ABS => { let a = self.abs(); let v = self.read(a); self.cmp(self.y, v); }
+            CPY_IMM => {
+                let v = self.imm();
+                self.cmp(self.y, v);
+            }
+            CPY_ZP => {
+                let a = self.zp();
+                let v = self.read(a);
+                self.cmp(self.y, v);
+            }
+            CPY_ABS => {
+                let a = self.abs();
+                let v = self.read(a);
+                self.cmp(self.y, v);
+            }
 
             // ── Shifts & Rotates ──────────────────────────────────────────────
             ASL_ACC => {
-                let c = (self.a >> 7) & 1; self.a <<= 1;
-                self.set_c(c != 0); self.nz(self.a);
+                let c = (self.a >> 7) & 1;
+                self.a <<= 1;
+                self.set_c(c != 0);
+                self.nz(self.a);
             }
-            ASL_ZP  => {
-                let a = self.zp();  let mut v = self.read(a);
-                let c = (v >> 7) & 1; v <<= 1; self.write(a, v);
-                self.set_c(c != 0); self.nz(v);
+            ASL_ZP => {
+                let a = self.zp();
+                let mut v = self.read(a);
+                let c = (v >> 7) & 1;
+                v <<= 1;
+                self.write(a, v);
+                self.set_c(c != 0);
+                self.nz(v);
             }
             ASL_ZPX => {
-                let a = self.zpx(); let mut v = self.read(a);
-                let c = (v >> 7) & 1; v <<= 1; self.write(a, v);
-                self.set_c(c != 0); self.nz(v);
+                let a = self.zpx();
+                let mut v = self.read(a);
+                let c = (v >> 7) & 1;
+                v <<= 1;
+                self.write(a, v);
+                self.set_c(c != 0);
+                self.nz(v);
             }
             ASL_ABS => {
-                let a = self.abs(); let mut v = self.read(a);
-                let c = (v >> 7) & 1; v <<= 1; self.write(a, v);
-                self.set_c(c != 0); self.nz(v);
+                let a = self.abs();
+                let mut v = self.read(a);
+                let c = (v >> 7) & 1;
+                v <<= 1;
+                self.write(a, v);
+                self.set_c(c != 0);
+                self.nz(v);
             }
             ASL_ABX => {
-                let a = self.absx(); let mut v = self.read(a);
-                let c = (v >> 7) & 1; v <<= 1; self.write(a, v);
-                self.set_c(c != 0); self.nz(v);
+                let a = self.absx();
+                let mut v = self.read(a);
+                let c = (v >> 7) & 1;
+                v <<= 1;
+                self.write(a, v);
+                self.set_c(c != 0);
+                self.nz(v);
             }
 
             LSR_ACC => {
-                let c = self.a & 1; self.a >>= 1;
-                self.set_c(c != 0); self.nz(self.a);
+                let c = self.a & 1;
+                self.a >>= 1;
+                self.set_c(c != 0);
+                self.nz(self.a);
             }
-            LSR_ZP  => {
-                let a = self.zp();  let mut v = self.read(a);
-                let c = v & 1; v >>= 1; self.write(a, v);
-                self.set_c(c != 0); self.nz(v);
+            LSR_ZP => {
+                let a = self.zp();
+                let mut v = self.read(a);
+                let c = v & 1;
+                v >>= 1;
+                self.write(a, v);
+                self.set_c(c != 0);
+                self.nz(v);
             }
             LSR_ZPX => {
-                let a = self.zpx(); let mut v = self.read(a);
-                let c = v & 1; v >>= 1; self.write(a, v);
-                self.set_c(c != 0); self.nz(v);
+                let a = self.zpx();
+                let mut v = self.read(a);
+                let c = v & 1;
+                v >>= 1;
+                self.write(a, v);
+                self.set_c(c != 0);
+                self.nz(v);
             }
             LSR_ABS => {
-                let a = self.abs(); let mut v = self.read(a);
-                let c = v & 1; v >>= 1; self.write(a, v);
-                self.set_c(c != 0); self.nz(v);
+                let a = self.abs();
+                let mut v = self.read(a);
+                let c = v & 1;
+                v >>= 1;
+                self.write(a, v);
+                self.set_c(c != 0);
+                self.nz(v);
             }
             LSR_ABX => {
-                let a = self.absx(); let mut v = self.read(a);
-                let c = v & 1; v >>= 1; self.write(a, v);
-                self.set_c(c != 0); self.nz(v);
+                let a = self.absx();
+                let mut v = self.read(a);
+                let c = v & 1;
+                v >>= 1;
+                self.write(a, v);
+                self.set_c(c != 0);
+                self.nz(v);
             }
 
             ROL_ACC => {
                 let old_c = self.p & FLAG_C != 0;
                 let new_c = self.a >> 7 != 0;
                 self.a = (self.a << 1) | (old_c as u8);
-                self.set_c(new_c); self.nz(self.a);
+                self.set_c(new_c);
+                self.nz(self.a);
             }
-            ROL_ZP  => {
-                let a = self.zp();  let mut v = self.read(a);
-                let old_c = self.p & FLAG_C != 0; let new_c = v >> 7 != 0;
-                v = (v << 1) | (old_c as u8); self.write(a, v);
-                self.set_c(new_c); self.nz(v);
+            ROL_ZP => {
+                let a = self.zp();
+                let mut v = self.read(a);
+                let old_c = self.p & FLAG_C != 0;
+                let new_c = v >> 7 != 0;
+                v = (v << 1) | (old_c as u8);
+                self.write(a, v);
+                self.set_c(new_c);
+                self.nz(v);
             }
             ROL_ZPX => {
-                let a = self.zpx(); let mut v = self.read(a);
-                let old_c = self.p & FLAG_C != 0; let new_c = v >> 7 != 0;
-                v = (v << 1) | (old_c as u8); self.write(a, v);
-                self.set_c(new_c); self.nz(v);
+                let a = self.zpx();
+                let mut v = self.read(a);
+                let old_c = self.p & FLAG_C != 0;
+                let new_c = v >> 7 != 0;
+                v = (v << 1) | (old_c as u8);
+                self.write(a, v);
+                self.set_c(new_c);
+                self.nz(v);
             }
             ROL_ABS => {
-                let a = self.abs(); let mut v = self.read(a);
-                let old_c = self.p & FLAG_C != 0; let new_c = v >> 7 != 0;
-                v = (v << 1) | (old_c as u8); self.write(a, v);
-                self.set_c(new_c); self.nz(v);
+                let a = self.abs();
+                let mut v = self.read(a);
+                let old_c = self.p & FLAG_C != 0;
+                let new_c = v >> 7 != 0;
+                v = (v << 1) | (old_c as u8);
+                self.write(a, v);
+                self.set_c(new_c);
+                self.nz(v);
             }
             ROL_ABX => {
-                let a = self.absx(); let mut v = self.read(a);
-                let old_c = self.p & FLAG_C != 0; let new_c = v >> 7 != 0;
-                v = (v << 1) | (old_c as u8); self.write(a, v);
-                self.set_c(new_c); self.nz(v);
+                let a = self.absx();
+                let mut v = self.read(a);
+                let old_c = self.p & FLAG_C != 0;
+                let new_c = v >> 7 != 0;
+                v = (v << 1) | (old_c as u8);
+                self.write(a, v);
+                self.set_c(new_c);
+                self.nz(v);
             }
 
             ROR_ACC => {
                 let old_c = self.p & FLAG_C != 0;
                 let new_c = self.a & 1 != 0;
                 self.a = (self.a >> 1) | ((old_c as u8) << 7);
-                self.set_c(new_c); self.nz(self.a);
+                self.set_c(new_c);
+                self.nz(self.a);
             }
-            ROR_ZP  => {
-                let a = self.zp();  let mut v = self.read(a);
-                let old_c = self.p & FLAG_C != 0; let new_c = v & 1 != 0;
-                v = (v >> 1) | ((old_c as u8) << 7); self.write(a, v);
-                self.set_c(new_c); self.nz(v);
+            ROR_ZP => {
+                let a = self.zp();
+                let mut v = self.read(a);
+                let old_c = self.p & FLAG_C != 0;
+                let new_c = v & 1 != 0;
+                v = (v >> 1) | ((old_c as u8) << 7);
+                self.write(a, v);
+                self.set_c(new_c);
+                self.nz(v);
             }
             ROR_ZPX => {
-                let a = self.zpx(); let mut v = self.read(a);
-                let old_c = self.p & FLAG_C != 0; let new_c = v & 1 != 0;
-                v = (v >> 1) | ((old_c as u8) << 7); self.write(a, v);
-                self.set_c(new_c); self.nz(v);
+                let a = self.zpx();
+                let mut v = self.read(a);
+                let old_c = self.p & FLAG_C != 0;
+                let new_c = v & 1 != 0;
+                v = (v >> 1) | ((old_c as u8) << 7);
+                self.write(a, v);
+                self.set_c(new_c);
+                self.nz(v);
             }
             ROR_ABS => {
-                let a = self.abs(); let mut v = self.read(a);
-                let old_c = self.p & FLAG_C != 0; let new_c = v & 1 != 0;
-                v = (v >> 1) | ((old_c as u8) << 7); self.write(a, v);
-                self.set_c(new_c); self.nz(v);
+                let a = self.abs();
+                let mut v = self.read(a);
+                let old_c = self.p & FLAG_C != 0;
+                let new_c = v & 1 != 0;
+                v = (v >> 1) | ((old_c as u8) << 7);
+                self.write(a, v);
+                self.set_c(new_c);
+                self.nz(v);
             }
             ROR_ABX => {
-                let a = self.absx(); let mut v = self.read(a);
-                let old_c = self.p & FLAG_C != 0; let new_c = v & 1 != 0;
-                v = (v >> 1) | ((old_c as u8) << 7); self.write(a, v);
-                self.set_c(new_c); self.nz(v);
+                let a = self.absx();
+                let mut v = self.read(a);
+                let old_c = self.p & FLAG_C != 0;
+                let new_c = v & 1 != 0;
+                v = (v >> 1) | ((old_c as u8) << 7);
+                self.write(a, v);
+                self.set_c(new_c);
+                self.nz(v);
             }
 
             // ── Branches ──────────────────────────────────────────────────────
-            BPL => { self.branch_with_page(self.p & FLAG_N == 0, &mut extra_cycles); }
-            BMI => { self.branch_with_page(self.p & FLAG_N != 0, &mut extra_cycles); }
-            BVC => { self.branch_with_page(self.p & FLAG_V == 0, &mut extra_cycles); }
-            BVS => { self.branch_with_page(self.p & FLAG_V != 0, &mut extra_cycles); }
-            BCC => { self.branch_with_page(self.p & FLAG_C == 0, &mut extra_cycles); }
-            BCS => { self.branch_with_page(self.p & FLAG_C != 0, &mut extra_cycles); }
-            BNE => { self.branch_with_page(self.p & FLAG_Z == 0, &mut extra_cycles); }
-            BEQ => { self.branch_with_page(self.p & FLAG_Z != 0, &mut extra_cycles); }
+            BPL => {
+                self.branch_with_page(self.p & FLAG_N == 0, &mut extra_cycles);
+            }
+            BMI => {
+                self.branch_with_page(self.p & FLAG_N != 0, &mut extra_cycles);
+            }
+            BVC => {
+                self.branch_with_page(self.p & FLAG_V == 0, &mut extra_cycles);
+            }
+            BVS => {
+                self.branch_with_page(self.p & FLAG_V != 0, &mut extra_cycles);
+            }
+            BCC => {
+                self.branch_with_page(self.p & FLAG_C == 0, &mut extra_cycles);
+            }
+            BCS => {
+                self.branch_with_page(self.p & FLAG_C != 0, &mut extra_cycles);
+            }
+            BNE => {
+                self.branch_with_page(self.p & FLAG_Z == 0, &mut extra_cycles);
+            }
+            BEQ => {
+                self.branch_with_page(self.p & FLAG_Z != 0, &mut extra_cycles);
+            }
 
             // ── Jumps / Subroutines / Returns ─────────────────────────────────
-            JMP_ABS => { let a = self.abs(); self.pc = a; }
+            JMP_ABS => {
+                let a = self.abs();
+                self.pc = a;
+            }
             JMP_IND => {
                 let ptr = self.abs();
                 let lo = self.read(ptr);
@@ -803,19 +1422,45 @@ impl Cpu {
             }
 
             // ── Stack & Status ────────────────────────────────────────────────
-            PHA => { self.push(self.a); }
-            PLA => { self.a = self.pop(); self.nz(self.a); }
-            PHP => { let s = self.p | FLAG_B | FLAG_U; self.push(s); }
-            PLP => { self.p = self.pop(); self.p |= FLAG_U; self.p &= !FLAG_B; }
+            PHA => {
+                self.push(self.a);
+            }
+            PLA => {
+                self.a = self.pop();
+                self.nz(self.a);
+            }
+            PHP => {
+                let s = self.p | FLAG_B | FLAG_U;
+                self.push(s);
+            }
+            PLP => {
+                self.p = self.pop();
+                self.p |= FLAG_U;
+                self.p &= !FLAG_B;
+            }
 
             // ── Flag Control ──────────────────────────────────────────────────
-            CLC => { self.p &= !FLAG_C; }
-            SEC => { self.p |=  FLAG_C; }
-            CLI => { self.p &= !FLAG_I; }
-            SEI => { self.p |=  FLAG_I; }
-            CLV => { self.p &= !FLAG_V; }
-            CLD => { self.p &= !FLAG_D; }
-            SED => { self.p |=  FLAG_D; }
+            CLC => {
+                self.p &= !FLAG_C;
+            }
+            SEC => {
+                self.p |= FLAG_C;
+            }
+            CLI => {
+                self.p &= !FLAG_I;
+            }
+            SEI => {
+                self.p |= FLAG_I;
+            }
+            CLV => {
+                self.p &= !FLAG_V;
+            }
+            CLD => {
+                self.p &= !FLAG_D;
+            }
+            SED => {
+                self.p |= FLAG_D;
+            }
 
             // ── BRK / NOP ─────────────────────────────────────────────────────
             BRK => {
@@ -867,17 +1512,29 @@ impl Cpu {
         let hi = self.read(addr.wrapping_add(1)) as u16;
         lo | (hi << 8)
     }
-    fn imm(&mut self) -> u8        { self.fetch8() }
-    fn zp(&mut self)  -> u16       { self.fetch8() as u16 }
-    fn zpx(&mut self) -> u16       { self.fetch8().wrapping_add(self.x) as u16 }
-    fn zpy(&mut self) -> u16       { self.fetch8().wrapping_add(self.y) as u16 }
+    fn imm(&mut self) -> u8 {
+        self.fetch8()
+    }
+    fn zp(&mut self) -> u16 {
+        self.fetch8() as u16
+    }
+    fn zpx(&mut self) -> u16 {
+        self.fetch8().wrapping_add(self.x) as u16
+    }
+    fn zpy(&mut self) -> u16 {
+        self.fetch8().wrapping_add(self.y) as u16
+    }
     fn abs(&mut self) -> u16 {
         let lo = self.fetch8() as u16;
         let hi = self.fetch8() as u16;
         lo | (hi << 8)
     }
-    fn absx(&mut self) -> u16 { self.abs().wrapping_add(self.x as u16) }
-    fn absy(&mut self) -> u16 { self.abs().wrapping_add(self.y as u16) }
+    fn absx(&mut self) -> u16 {
+        self.abs().wrapping_add(self.x as u16)
+    }
+    fn absy(&mut self) -> u16 {
+        self.abs().wrapping_add(self.y as u16)
+    }
     fn absx_pc(&mut self) -> (u16, bool) {
         let base = self.abs();
         let addr = base.wrapping_add(self.x as u16);
@@ -923,7 +1580,9 @@ impl Cpu {
         let (taken, cross) = self.branch(cond);
         if taken {
             *extra += 1;
-            if cross { *extra += 1; }
+            if cross {
+                *extra += 1;
+            }
         }
         taken
     }
@@ -998,7 +1657,9 @@ impl Cpu {
         let hit = self.write_hooks.iter().position(|(a, _)| *a == addr);
         if let Some(i) = hit {
             let ptr: *const (u16, Box<dyn Fn(&mut Cpu, u16, u8)>) = &self.write_hooks[i];
-            unsafe { ((*ptr).1)(self, addr, v); }
+            unsafe {
+                ((*ptr).1)(self, addr, v);
+            }
             return;
         }
         self.mem[addr as usize] = v;
@@ -1019,14 +1680,30 @@ impl Cpu {
 
     // ── Flag helpers & arithmetic ──────────────────────────────────────────────
     fn set_c(&mut self, c: bool) {
-        if c { self.p |= FLAG_C; } else { self.p &= !FLAG_C; }
+        if c {
+            self.p |= FLAG_C;
+        } else {
+            self.p &= !FLAG_C;
+        }
     }
     fn set_v(&mut self, v: bool) {
-        if v { self.p |= FLAG_V; } else { self.p &= !FLAG_V; }
+        if v {
+            self.p |= FLAG_V;
+        } else {
+            self.p &= !FLAG_V;
+        }
     }
     fn nz(&mut self, v: u8) {
-        if v == 0 { self.p |= FLAG_Z; } else { self.p &= !FLAG_Z; }
-        if v & 0x80 != 0 { self.p |= FLAG_N; } else { self.p &= !FLAG_N; }
+        if v == 0 {
+            self.p |= FLAG_Z;
+        } else {
+            self.p &= !FLAG_Z;
+        }
+        if v & 0x80 != 0 {
+            self.p |= FLAG_N;
+        } else {
+            self.p &= !FLAG_N;
+        }
     }
     fn adc(&mut self, v: u8) {
         let carry = (self.p & FLAG_C) != 0;
@@ -1039,8 +1716,14 @@ impl Cpu {
         if self.p & FLAG_D != 0 {
             let mut lo = (a & 0x0F) + (v & 0x0F) + (carry as u8);
             let mut hi = (a >> 4) + (v >> 4);
-            if lo > 9 { lo = lo.wrapping_add(6); hi = hi.wrapping_add(1); }
-            if hi > 9 { hi = hi.wrapping_add(6); c_out = true; }
+            if lo > 9 {
+                lo = lo.wrapping_add(6);
+                hi = hi.wrapping_add(1);
+            }
+            if hi > 9 {
+                hi = hi.wrapping_add(6);
+                c_out = true;
+            }
             result = (lo & 0x0F) | ((hi & 0x0F) << 4);
         }
         self.a = result;
@@ -1065,9 +1748,19 @@ impl Cpu {
             let borrow_in = (!carry) as i16;
             let mut lo = lo_a - lo_v - borrow_in;
             let mut borrow = 0;
-            if lo < 0 { lo -= 6; lo += 16; borrow = 1; }
+            if lo < 0 {
+                lo -= 6;
+                lo += 16;
+                borrow = 1;
+            }
             let mut hi = hi_a - hi_v - borrow;
-            if hi < 0 { hi -= 6; hi += 16; c_out = false; } else { c_out = true; }
+            if hi < 0 {
+                hi -= 6;
+                hi += 16;
+                c_out = false;
+            } else {
+                c_out = true;
+            }
             result = ((hi as u8) << 4) | ((lo as u8) & 0x0F);
         }
         self.a = result;
@@ -1082,20 +1775,42 @@ impl Cpu {
     }
     fn bit(&mut self, v: u8) {
         let r = self.a & v;
-        if r == 0 { self.p |= FLAG_Z; } else { self.p &= !FLAG_Z; }
-        if v & 0x40 != 0 { self.p |= FLAG_V; } else { self.p &= !FLAG_V; }
-        if v & 0x80 != 0 { self.p |= FLAG_N; } else { self.p &= !FLAG_N; }
+        if r == 0 {
+            self.p |= FLAG_Z;
+        } else {
+            self.p &= !FLAG_Z;
+        }
+        if v & 0x40 != 0 {
+            self.p |= FLAG_V;
+        } else {
+            self.p &= !FLAG_V;
+        }
+        if v & 0x80 != 0 {
+            self.p |= FLAG_N;
+        } else {
+            self.p &= !FLAG_N;
+        }
     }
 }
 
 // ── Interrupt vector addresses ────────────────────────────────────────────────
-fn vec_nmi() -> u16 { 0xFFFA }
-fn vec_irq() -> u16 { 0xFFFE }
+fn vec_nmi() -> u16 {
+    0xFFFA
+}
+fn vec_irq() -> u16 {
+    0xFFFE
+}
 
 impl Cpu {
-    pub fn request_irq(&mut self) { self.irq_pending = true; }
-    pub fn request_nmi(&mut self) { self.nmi_pending = true; }
-    pub fn disable_brk_trap(&mut self) { self.trap_brk = false; }
+    pub fn request_irq(&mut self) {
+        self.irq_pending = true;
+    }
+    pub fn request_nmi(&mut self) {
+        self.nmi_pending = true;
+    }
+    pub fn disable_brk_trap(&mut self) {
+        self.trap_brk = false;
+    }
 }
 
 // ── Unit tests ────────────────────────────────────────────────────────────────
@@ -1116,7 +1831,9 @@ mod tests {
         // LDA #$10 ; STA $02 ; LDA $02 ; BRK
         c.load(0x0800, &[LDA_IMM, 0x10, STA_ZP, 0x02, LDA_ZP, 0x02, BRK]);
         c.reset();
-        while !c.halted { c.step(); }
+        while !c.halted {
+            c.step();
+        }
         assert_eq!(c.a, 0x10);
         assert_eq!(c.mem[0x0002], 0x10);
     }
@@ -1125,9 +1842,14 @@ mod tests {
     fn adc_sbc() {
         let mut c = base_cpu();
         // LDA #5 ; ADC #3 -> 8 ; SEC ; SBC #1 -> 7 ; BRK
-        c.load(0x0800, &[LDA_IMM, 0x05, ADC_IMM, 0x03, SEC, SBC_IMM, 0x01, BRK]);
+        c.load(
+            0x0800,
+            &[LDA_IMM, 0x05, ADC_IMM, 0x03, SEC, SBC_IMM, 0x01, BRK],
+        );
         c.reset();
-        while !c.halted { c.step(); }
+        while !c.halted {
+            c.step();
+        }
         assert_eq!(c.a, 0x07);
     }
 
@@ -1137,7 +1859,9 @@ mod tests {
         // LDA #1 ; BNE +1 (skip BRK) ; BRK ; LDA #5 ; BRK
         c.load(0x0800, &[LDA_IMM, 0x01, BNE, 0x01, BRK, LDA_IMM, 0x05, BRK]);
         c.reset();
-        while !c.halted { c.step(); }
+        while !c.halted {
+            c.step();
+        }
         assert_eq!(c.a, 0x05);
     }
 
@@ -1147,7 +1871,9 @@ mod tests {
         // LDA #5 ; CMP #3 ; BRK
         c.load(0x0800, &[LDA_IMM, 0x05, CMP_IMM, 0x03, BRK]);
         c.reset();
-        while !c.halted { c.step(); }
+        while !c.halted {
+            c.step();
+        }
         assert!(c.p & FLAG_C != 0);
     }
 
@@ -1160,7 +1886,12 @@ mod tests {
         // SED ; LDA #$15 ; ADC #$27 -> $42 BCD ; BRK
         c.load(0x0800, &[SED, LDA_IMM, 0x15, ADC_IMM, 0x27, BRK]);
         c.reset();
-        while !c.halted { c.step(); if c.cycles > 50 { break; } }
+        while !c.halted {
+            c.step();
+            if c.cycles > 50 {
+                break;
+            }
+        }
         assert_eq!(c.a, 0x42);
     }
 
@@ -1176,7 +1907,12 @@ mod tests {
         c.reset();
         c.step(); // CLI clears I
         c.request_irq();
-        for _ in 0..30 { if c.halted { break; } c.step(); }
+        for _ in 0..30 {
+            if c.halted {
+                break;
+            }
+            c.step();
+        }
         assert!(c.halted, "IRQ handler did not BRK");
         assert_eq!(c.a, 0x33);
     }
@@ -1188,7 +1924,9 @@ mod tests {
         let mut c = base_cpu();
         let out = Rc::new(RefCell::new(Vec::<u8>::new()));
         let out2 = out.clone();
-        c.hook_write(0xF001, move |_cpu, _addr, v| { out2.borrow_mut().push(v); });
+        c.hook_write(0xF001, move |_cpu, _addr, v| {
+            out2.borrow_mut().push(v);
+        });
         // LDA #'A' ; STA $F001 ; BRK
         c.load(0x0800, &[LDA_IMM, b'A', STA_ABS, 0x01, 0xF0, BRK]);
         c.reset();
@@ -1203,7 +1941,9 @@ mod tests {
         c.load(0x0800, &[LDX_IMM, 0x01, LDA_ABX, 0xFF, 0x10, BRK]);
         c.mem[0x1100] = 0x55;
         c.reset();
-        while !c.halted { c.step(); }
+        while !c.halted {
+            c.step();
+        }
         // LDX #=2, LDA abs,X base 4 +1 page cross, BRK=2 => total 9
         assert_eq!(c.cycles, 9);
         assert_eq!(c.a, 0x55);
@@ -1217,7 +1957,12 @@ mod tests {
         c.mem[0xFFFC] = 0xFE;
         c.mem[0xFFFD] = 0x08;
         c.reset();
-        while !c.halted { c.step(); if c.cycles > 30 { break; } }
+        while !c.halted {
+            c.step();
+            if c.cycles > 30 {
+                break;
+            }
+        }
         assert_eq!(c.cycles, 7);
     }
 }

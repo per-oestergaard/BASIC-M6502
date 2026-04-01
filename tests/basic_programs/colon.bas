@@ -1,0 +1,2 @@
+10 A=4:B=6:PRINT A+B
+20 END

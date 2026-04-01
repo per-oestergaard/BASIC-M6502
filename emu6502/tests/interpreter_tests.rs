@@ -80,8 +80,18 @@ fn test_arithmetic() {
 }
 
 #[test]
+fn test_arrays() {
+    test_basic_program("arrays");
+}
+
+#[test]
 fn test_variables() {
     test_basic_program("variables");
+}
+
+#[test]
+fn test_colon() {
+    test_basic_program("colon");
 }
 
 #[test]
@@ -90,8 +100,43 @@ fn test_for_loop() {
 }
 
 #[test]
+fn test_nested_for() {
+    test_basic_program("nested_for");
+}
+
+#[test]
+fn test_step_loop() {
+    test_basic_program("step_loop");
+}
+
+#[test]
+fn test_goto() {
+    test_basic_program("goto");
+}
+
+#[test]
+fn test_gosub() {
+    test_basic_program("gosub");
+}
+
+#[test]
+fn test_if_gosub() {
+    test_basic_program("if_gosub");
+}
+
+#[test]
+fn test_gosub_state() {
+    test_basic_program("gosub_state");
+}
+
+#[test]
 fn test_conditional() {
     test_basic_program("conditional");
+}
+
+#[test]
+fn test_relops() {
+    test_basic_program("relops");
 }
 
 #[test]

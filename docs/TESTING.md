@@ -71,12 +71,12 @@ cargo test -p emu6502 --test interpreter_tests -- --nocapture
 
 ## Current Test Status
 
-**As of now:** The interpreter binary is not yet built, so tests are skipped.
+With `build/original/basic.bin` present, the interpreter integration suite currently passes with 17 tests.
 
-**Expected behavior:**
-- Tests show: `SKIP: <test_name> (interpreter not built yet at ...)`
-- The test framework is ready to run once the binary is available
-- Building requires completing the assembly translation (step 2)
+Current direct command:
+```bash
+cargo test -p emu6502 --test interpreter_tests
+```
 
 ## Adding New Tests
 
@@ -118,26 +118,36 @@ Current tests cover:
 
 ### Arithmetic
 - `arithmetic.bas` - Addition, subtraction, multiplication, division
+- `colon.bas` - Multiple statements on one line
 
 ### Variables
 - `variables.bas` - Variable assignment and use
 - `expressions.bas` - Variable expressions and arithmetic
+- `arrays.bas` - DIM and indexed array assignment/access
 
 ### Control Flow
 - `for_loop.bas` - FOR/NEXT loops
+- `nested_for.bas` - Nested FOR/NEXT loops
+- `step_loop.bas` - Descending FOR/NEXT with STEP
 - `conditional.bas` - IF/THEN statements
+- `relops.bas` - Additional relational operators (`<>`, `>=`, `<=`)
+- `goto.bas` - GOTO branch control flow
+- `gosub.bas` - GOSUB/RETURN subroutines
+- `if_gosub.bas` - IF/THEN combined with GOSUB
+- `gosub_state.bas` - Variable mutation across subroutine calls
 
 ## Future Enhancements
 
-When the interpreter is available, consider adding tests for:
+Useful next additions would be:
 - String operations
-- Arrays
 - More complex expressions
 - Error handling
-- Multiple statement types
-- Nested loops
-- Subroutines (GOSUB/RETURN)
+- DATA/READ/RESTORE
 - Mathematical functions (SIN, COS, etc.)
+
+Known currently failing probe areas:
+- `DATA/READ` currently does not execute correctly in the Rust-emulated interpreter test path
+- Some numeric and string built-ins currently hit an unimplemented opcode path in the CPU core during probing
 
 ## Integration with Build System
 
