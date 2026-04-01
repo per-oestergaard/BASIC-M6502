@@ -572,8 +572,9 @@ fn parse_xwd(stmt: &str, label: Option<String>) -> Result<Vec<SourceNode>> {
     //   is consumed as the zero-page operand.
     // - SKIP2 (`BIT abs`) is also used as an opcode-only skip trick that
     //   consumes the following two-byte instruction.
-    // - The remaining site (`LDAI`) uses a synthetic 2-byte form whose operand
-    //   only needs to be non-zero.
+    // - The remaining site (`LDAI TYA`) is another opcode-only trick used by
+    //   READ: emit just `LDA #imm`'s opcode so the following `TYA` opcode byte
+    //   becomes the immediate operand ($98), then SKIP2 skips `LDAI 0`.
     let rest = after_first_keyword(stmt);
     let args = split_args(rest);
     if args.len() != 2 {
@@ -588,6 +589,7 @@ fn parse_xwd(stmt: &str, label: Option<String>) -> Result<Vec<SourceNode>> {
     let emitted = match opcode_value {
         0x24 => vec![format!("<{opcode}>&^O377")],
         0x2C => vec![format!("<{opcode}>&^O377")],
+        0xA9 => vec![format!("<{opcode}>&^O377")],
         _ => vec![
             format!("<{opcode}>&^O377"),
             format!("<{addr}>/^O400"),

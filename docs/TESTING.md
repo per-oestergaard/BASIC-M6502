@@ -72,17 +72,12 @@ cargo test -p emu6502 --test interpreter_tests -- --nocapture
 ## Current Test Status
 
 With `build/original/basic.bin` present, the interpreter integration suite currently has:
-- 20 passing tests in the normal lane
-- 1 ignored known-failure coverage target
+- 21 passing tests in the normal lane
+- 0 ignored known-failure coverage targets
 
 Current direct command:
 ```bash
 cargo test -p emu6502 --test interpreter_tests
-```
-
-Run only the known-failure coverage targets:
-```bash
-cargo test -p emu6502 --test interpreter_tests -- --ignored
 ```
 
 ## Adding New Tests
@@ -150,15 +145,10 @@ Useful next additions would be:
 - String operations
 - More complex expressions
 - Error handling
-- DATA/READ/RESTORE
 - Mathematical functions (SIN, COS, etc.)
 
 Known currently failing probe areas:
-- `DATA/READ` currently does not execute correctly in the Rust-emulated interpreter test path
-- Some numeric and string built-ins currently hit an unimplemented opcode path in the CPU core during probing
-
-Checked-in known-failure coverage target:
-- `data_read.bas` - DATA/READ sequencing
+- None in the checked-in interpreter integration suite at the moment
 
 ## Integration with Build System
 

@@ -168,7 +168,6 @@ fn test_interpreter_binary_status() {
 }
 
 #[test]
-#[ignore = "known failing coverage target"]
 fn test_data_read() {
     test_basic_program("data_read");
 }
