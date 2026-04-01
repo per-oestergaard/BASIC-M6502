@@ -50,7 +50,10 @@ fn test_basic_program(program_name: &str) {
         .unwrap_or_else(|e| panic!("Failed to read {}.expected: {}", program_name, e));
 
     if !interpreter_exists() {
-        info!(program = program_name, "skipping test because interpreter binary is not built");
+        info!(
+            program = program_name,
+            "skipping test because interpreter binary is not built"
+        );
         return;
     }
 
@@ -82,6 +85,11 @@ fn test_arithmetic() {
 #[test]
 fn test_arrays() {
     test_basic_program("arrays");
+}
+
+#[test]
+fn test_array_bounds_error() {
+    test_basic_program("array_bounds_error");
 }
 
 #[test]
@@ -157,4 +165,20 @@ fn test_interpreter_binary_status() {
     } else {
         info!(path = INTERPRETER_BINARY, "interpreter binary not found");
     }
+}
+
+#[test]
+#[ignore = "known failing coverage target"]
+fn test_data_read() {
+    test_basic_program("data_read");
+}
+
+#[test]
+fn test_math_funcs() {
+    test_basic_program("math_funcs");
+}
+
+#[test]
+fn test_string_ops() {
+    test_basic_program("string_ops");
 }

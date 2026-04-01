@@ -249,6 +249,7 @@ fn parse_one(stmt: &str) -> Result<Vec<SourceNode>> {
         // DCE and DCI are left to macro expansion because this source defines
         // them as macros with side effects on Q.
         "DC" | "DT" => return parse_dc(stmt, None),
+        "EXP" => return parse_bytes(stmt, None),
         "BYTE" | "DB" | ".BYTE" => return parse_bytes(stmt, None),
         "WORD" | "DW" | ".WORD" => return parse_words(stmt, None),
         "ADR" => return parse_adr(stmt, None),
@@ -257,7 +258,7 @@ fn parse_one(stmt: &str) -> Result<Vec<SourceNode>> {
 
         // Assembler control / metadata: silently skip
         "TITLE" | "SUBTTL" | "SEARCH" | "SALL" | "XLIST" | "LIST" | "PAGE" | "PURGE"
-        | "PRINTX" | "EXP" | "ASECT" | "DSECT" | "IRPC" | "LET" | "END" => {
+        | "PRINTX" | "ASECT" | "DSECT" | "IRPC" | "LET" | "END" => {
             return Ok(vec![]);
         }
 
@@ -346,6 +347,7 @@ fn parse_with_label(body: &str, label: Option<String>) -> Result<Vec<SourceNode>
             return Ok(nodes);
         }
         "DC" | "DT" => return parse_dc(body, label),
+        "EXP" => return parse_bytes(body, label),
         "BYTE" | "DB" | ".BYTE" => return parse_bytes(body, label),
         "WORD" | "DW" | ".WORD" => return parse_words(body, label),
         "ADR" => return parse_adr(body, label),
@@ -364,7 +366,7 @@ fn parse_with_label(body: &str, label: Option<String>) -> Result<Vec<SourceNode>
             return Ok(vec![SourceNode::Equate { name, expr }]);
         }
         "TITLE" | "SUBTTL" | "SEARCH" | "SALL" | "XLIST" | "LIST" | "PAGE" | "PURGE"
-        | "PRINTX" | "EXP" | "ASECT" | "DSECT" | "IRPC" => {
+        | "PRINTX" | "ASECT" | "DSECT" | "IRPC" => {
             return Ok(label
                 .into_iter()
                 .map(|name| SourceNode::Label { name })

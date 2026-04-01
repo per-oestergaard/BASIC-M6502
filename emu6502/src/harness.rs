@@ -369,24 +369,8 @@ impl BasicHarness {
 
         // Convert output to string: Apple II CR ($0D) → newline, strip non-printables
         let raw = output.borrow().clone();
-        let s = normalize_basic_output(&raw
-            .iter()
-            .map(|&b| {
-                let c = b & 0x7F;
-                if c == 0x0D {
-                    '\n'
-                } else if c >= 0x20 && c < 0x7F {
-                    c as char
-                } else {
-                    '\0'
-                }
-            })
-            .filter(|&c| c != '\0')
-            .collect::<String>());
-
-        if let Some(start) = *run_output_start.borrow() {
-            let post_run = normalize_basic_output(&raw[start..]
-                .iter()
+        let s = normalize_basic_output(
+            &raw.iter()
                 .map(|&b| {
                     let c = b & 0x7F;
                     if c == 0x0D {
@@ -398,7 +382,26 @@ impl BasicHarness {
                     }
                 })
                 .filter(|&c| c != '\0')
-                .collect::<String>());
+                .collect::<String>(),
+        );
+
+        if let Some(start) = *run_output_start.borrow() {
+            let post_run = normalize_basic_output(
+                &raw[start..]
+                    .iter()
+                    .map(|&b| {
+                        let c = b & 0x7F;
+                        if c == 0x0D {
+                            '\n'
+                        } else if c >= 0x20 && c < 0x7F {
+                            c as char
+                        } else {
+                            '\0'
+                        }
+                    })
+                    .filter(|&c| c != '\0')
+                    .collect::<String>(),
+            );
             let trimmed = post_run.trim();
             if let Some(without_ok) = trimmed.strip_suffix("\n\nOK") {
                 return Ok(without_ok.trim().to_string());
@@ -486,7 +489,10 @@ mod tests {
         init_tracing();
         let bin_path = "../build/original/basic.bin";
         if !std::path::Path::new(bin_path).exists() {
-            info!(path = bin_path, "skipping trace_init because binary was not found");
+            info!(
+                path = bin_path,
+                "skipping trace_init because binary was not found"
+            );
             return;
         }
         use std::cell::RefCell;
@@ -554,7 +560,11 @@ mod tests {
             cpu.step();
             if cpu.halted && halted_at.is_none() {
                 halted_at = Some(pc_before);
-                info!(pc = pc_before, opcode = data.get(pc_before as usize).copied().unwrap_or(0), "CPU halted");
+                info!(
+                    pc = pc_before,
+                    opcode = data.get(pc_before as usize).copied().unwrap_or(0),
+                    "CPU halted"
+                );
                 break;
             }
             if *cqinln_hit.borrow() {
@@ -580,7 +590,16 @@ mod tests {
                 }
             })
             .collect();
-        info!(instructions = instr_count, ?halted_at, pc = cpu.pc, a = cpu.a, x = cpu.x, y = cpu.y, sp = cpu.sp, "trace_init summary");
+        info!(
+            instructions = instr_count,
+            ?halted_at,
+            pc = cpu.pc,
+            a = cpu.a,
+            x = cpu.x,
+            y = cpu.y,
+            sp = cpu.sp,
+            "trace_init summary"
+        );
         info!(txttab_lo = cpu.mem[0x6A], txttab_hi = cpu.mem[0x6B], chrget_lo = cpu.mem[0xBA], chrget_hi = cpu.mem[0xBB], samples = ?sample_pcs, output_len = raw.len(), output = %&s[..s.len().min(200)], "trace_init state");
     }
 

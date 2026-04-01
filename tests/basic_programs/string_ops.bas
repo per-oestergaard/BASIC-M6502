@@ -1,0 +1,5 @@
+10 A$="HI"
+20 B$="THERE"
+30 PRINT A$+" "+B$
+40 PRINT LEN(B$)
+50 END
