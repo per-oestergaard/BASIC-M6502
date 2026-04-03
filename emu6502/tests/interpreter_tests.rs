@@ -296,3 +296,75 @@ fn test_get_loop() {
 fn test_clear_state() {
     test_basic_program("clear_state");
 }
+
+// ── Error Condition Tests ──────────────────────────────────────────────────────
+
+#[test]
+fn test_error_next_without_for() {
+    test_basic_program("error_next_without_for");
+}
+
+#[test]
+fn test_error_syntax() {
+    test_basic_program("error_syntax");
+}
+
+#[test]
+fn test_error_return_without_gosub() {
+    test_basic_program("error_return_without_gosub");
+}
+
+#[test]
+fn test_error_out_of_data() {
+    test_basic_program("error_out_of_data");
+}
+
+#[test]
+fn test_error_division_by_zero() {
+    test_basic_program("error_division_by_zero");
+}
+
+#[test]
+fn test_error_undef_statement() {
+    test_basic_program("error_undef_statement");
+}
+
+#[test]
+fn test_error_redim_array() {
+    test_basic_program("error_redim_array");
+}
+
+#[test]
+fn test_error_type_mismatch() {
+    test_basic_program("error_type_mismatch");
+}
+
+#[test]
+fn test_error_undef_function() {
+    test_basic_program("error_undef_function");
+}
+
+#[test]
+fn test_error_illegal_quantity() {
+    test_basic_program("error_illegal_quantity");
+}
+
+#[test]
+fn test_error_overflow() {
+    test_basic_program("error_overflow");
+}
+
+
+// The following errors exist in m6502.asm but are difficult to trigger in practice:
+// - ERRLS ("STRING TOO LONG"): Requires string concatenation result >= 256 chars
+// - ERRST ("FORMULA TOO COMPLEX"): Requires exhausting all string temporaries
+// These test files exist but the tests are commented out.
+
+// fn test_error_string_too_long() {
+//     test_basic_program("error_string_too_long");
+// }
+
+// #[test]
+// fn test_error_formula_too_complex() {
+//     test_basic_program("error_formula_too_complex");
+// }

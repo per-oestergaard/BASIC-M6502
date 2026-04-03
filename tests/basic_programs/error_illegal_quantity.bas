@@ -1,0 +1,2 @@
+10 PRINT SQR(-1)
+20 END

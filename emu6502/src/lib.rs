@@ -1484,8 +1484,18 @@ impl Cpu {
             }
             NOP => {}
 
+            // Illegal/undocumented opcodes
+            // Many illegal opcodes are "JAM" or "KIL" instructions that halt the CPU
+            // For now, treat them as halting behavior with a warning
             _ => {
-                panic!("unimplemented opcode {:02X} @ ${:04X}", op, instr_pc);
+                trace!(
+                    target: "emu6502::cpu",
+                    "illegal/undocumented opcode {:02X} @ ${:04X} - halting CPU",
+                    op,
+                    instr_pc
+                );
+                self.halted = true;
+                return;
             }
         }
         self.cycles += Self::base_cycles(op) as u64 + extra_cycles as u64;

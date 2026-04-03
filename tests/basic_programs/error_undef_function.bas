@@ -1,0 +1,2 @@
+10 PRINT FNA(5)
+20 END

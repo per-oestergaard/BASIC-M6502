@@ -1,0 +1,3 @@
+10 A$="HELLO"
+20 PRINT A$+5
+30 END
