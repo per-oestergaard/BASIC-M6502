@@ -1,0 +1,7 @@
+10 N=7
+20 S$=""
+30 FOR I=1 TO N
+40 S$=S$+"*"
+50 NEXT I
+60 PRINT S$
+70 END

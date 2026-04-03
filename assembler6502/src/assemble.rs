@@ -11,6 +11,7 @@ use tracing::trace;
 
 use crate::ast::FlatStmt;
 use crate::opcode::AddrMode::{self, *};
+use crate::symbols::canonicalize_symbol_name;
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -63,28 +64,28 @@ fn pass1(stmts: &[FlatStmt]) -> HashMap<String, i64> {
                 radix = *base;
             }
             FlatStmt::Label(name) => {
-                sym.insert(name.clone(), pc as i64);
+                sym.insert(canonicalize_symbol_name(name), pc as i64);
                 trace!(target: "assembler6502::assemble", label = %name, pc, "label");
             }
             FlatStmt::Equate { name, expr } => {
                 let value = eval_expr(expr, pc, &sym, radix);
-                sym.insert(name.clone(), value);
+                sym.insert(canonicalize_symbol_name(name), value);
             }
             FlatStmt::Bytes { label, values } => {
                 if let Some(lbl) = label {
-                    sym.insert(lbl.clone(), pc as i64);
+                    sym.insert(canonicalize_symbol_name(lbl), pc as i64);
                 }
                 pc = pc.wrapping_add(values.len() as u16);
             }
             FlatStmt::Word { label, .. } => {
                 if let Some(lbl) = label {
-                    sym.insert(lbl.clone(), pc as i64);
+                    sym.insert(canonicalize_symbol_name(lbl), pc as i64);
                 }
                 pc = pc.wrapping_add(2);
             }
             FlatStmt::Res { label, count } => {
                 if let Some(lbl) = label {
-                    sym.insert(lbl.clone(), pc as i64);
+                    sym.insert(canonicalize_symbol_name(lbl), pc as i64);
                 }
                 pc = pc.wrapping_add(*count);
             }
@@ -94,7 +95,7 @@ fn pass1(stmts: &[FlatStmt]) -> HashMap<String, i64> {
                 operand,
             } => {
                 if let Some(lbl) = label {
-                    sym.insert(lbl.clone(), pc as i64);
+                    sym.insert(canonicalize_symbol_name(lbl), pc as i64);
                 }
                 let size = instr_size(mnemonic, operand.as_deref(), pc, &sym, radix);
                 pc = pc.wrapping_add(size as u16);
@@ -281,7 +282,13 @@ fn resolve_opcode(mnemonic: &str, mode: AddrMode) -> Option<u8> {
 // Instruction size estimation (used by both passes)
 // ---------------------------------------------------------------------------
 
-fn instr_size(mnemonic: &str, operand: Option<&str>, pc: u16, sym: &HashMap<String, i64>, radix: u32) -> usize {
+fn instr_size(
+    mnemonic: &str,
+    operand: Option<&str>,
+    pc: u16,
+    sym: &HashMap<String, i64>,
+    radix: u32,
+) -> usize {
     let (mode, _) = parse_operand(operand, pc, sym, mnemonic, radix);
     crate::opcode::size_for(mode)
 }
@@ -601,7 +608,10 @@ fn expr_atom<'a>(s: &'a str, pc: u16, sym: &HashMap<String, i64>, radix: u32) ->
             })
             .unwrap_or(s.len());
         let name = s[..end].to_ascii_uppercase();
-        let val = sym.get(&name).copied().unwrap_or(0);
+        let val = sym
+            .get(&canonicalize_symbol_name(&name))
+            .copied()
+            .unwrap_or(0);
         return (val, &s[end..]);
     }
 

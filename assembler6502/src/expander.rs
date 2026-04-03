@@ -11,6 +11,7 @@
 ///   - Never error on out-of-range branches — the assembler rewrites them.
 use crate::ast::{CondKind, FlatStmt, SourceNode};
 use crate::parser::parse;
+use crate::symbols::canonicalize_symbol_name;
 use anyhow::Result;
 use std::collections::HashMap;
 use tracing::trace;
@@ -70,11 +71,11 @@ impl Expander {
     pub fn new() -> Self {
         let mut syms: HashMap<String, i64> = HashMap::new();
         // Seed with Apple II config constants (the source tests ADDPRC, REALIO, etc.)
-        syms.insert("ADDPRC".to_string(), 1);
-        syms.insert("REALIO".to_string(), 4);
-        syms.insert("APPLE".to_string(), 1);
-        syms.insert("KIMROM".to_string(), 0);
-        syms.insert("MSFT".to_string(), 0);
+        syms.insert(canonicalize_symbol_name("ADDPRC"), 1);
+        syms.insert(canonicalize_symbol_name("REALIO"), 4);
+        syms.insert(canonicalize_symbol_name("APPLE"), 1);
+        syms.insert(canonicalize_symbol_name("KIMROM"), 0);
+        syms.insert(canonicalize_symbol_name("MSFT"), 0);
         Self {
             symbols: syms,
             macros: HashMap::new(),
@@ -102,7 +103,7 @@ impl Expander {
             SourceNode::Equate { name, expr } => {
                 if let Some(val) = try_eval_expr(expr.trim(), &self.symbols, self.radix) {
                     trace!(target: "assembler6502::expander", sym = %name, val, "equate");
-                    self.symbols.insert(name.clone(), val);
+                    self.symbols.insert(canonicalize_symbol_name(&name), val);
                 } else {
                     trace!(target: "assembler6502::expander", sym = %name, expr = %expr, "deferred equate");
                 }
@@ -138,9 +139,9 @@ impl Expander {
                 let take_then = match kind {
                     CondKind::IfEq => self.eval_expr_str(&expr) == 0,
                     CondKind::IfNe => self.eval_expr_str(&expr) != 0,
-                    CondKind::IfNotDef => {
-                        !self.symbols.contains_key(&expr.trim().to_ascii_uppercase())
-                    }
+                    CondKind::IfNotDef => !self
+                        .symbols
+                        .contains_key(&canonicalize_symbol_name(expr.trim())),
                     CondKind::If1 => true,
                     CondKind::If2 => false,
                 };
@@ -178,9 +179,13 @@ impl Expander {
             SourceNode::MacroCall { label, name, arg } => {
                 let upper = name.to_ascii_uppercase();
                 if upper == "DCI" {
-                    let current_q = self.symbols.get("Q").copied().unwrap_or(0);
+                    let current_q = self
+                        .symbols
+                        .get(&canonicalize_symbol_name("Q"))
+                        .copied()
+                        .unwrap_or(0);
                     let next_q = current_q + 1;
-                    self.symbols.insert("Q".to_string(), next_q);
+                    self.symbols.insert(canonicalize_symbol_name("Q"), next_q);
                     out.push(FlatStmt::Equate {
                         name: "Q".to_string(),
                         expr: "Q+1".to_string(),
@@ -630,7 +635,11 @@ fn try_eval_mul<'a>(s: &'a str, syms: &HashMap<String, i64>, radix: u32) -> Opti
     Some((val, rest))
 }
 
-fn try_eval_unary<'a>(s: &'a str, syms: &HashMap<String, i64>, radix: u32) -> Option<(i64, &'a str)> {
+fn try_eval_unary<'a>(
+    s: &'a str,
+    syms: &HashMap<String, i64>,
+    radix: u32,
+) -> Option<(i64, &'a str)> {
     let s = s.trim_start();
     if s.starts_with('-') {
         let (v, r) = try_eval_atom(s[1..].trim_start(), syms, radix)?;
@@ -642,7 +651,11 @@ fn try_eval_unary<'a>(s: &'a str, syms: &HashMap<String, i64>, radix: u32) -> Op
     try_eval_atom(s, syms, radix)
 }
 
-fn try_eval_atom<'a>(s: &'a str, syms: &HashMap<String, i64>, radix: u32) -> Option<(i64, &'a str)> {
+fn try_eval_atom<'a>(
+    s: &'a str,
+    syms: &HashMap<String, i64>,
+    radix: u32,
+) -> Option<(i64, &'a str)> {
     let s = s.trim_start();
     if s.starts_with('<') {
         let body = collect_angle_body_str(&s[1..]);
@@ -691,7 +704,7 @@ fn try_eval_atom<'a>(s: &'a str, syms: &HashMap<String, i64>, radix: u32) -> Opt
         let end = s
             .find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '$')
             .unwrap_or(s.len());
-        let sym = s[..end].to_ascii_uppercase();
+        let sym = canonicalize_symbol_name(&s[..end]);
         let val = syms.get(&sym).copied()?;
         return Some((val, &s[end..]));
     }
@@ -813,7 +826,7 @@ fn eval_atom<'a>(s: &'a str, syms: &HashMap<String, i64>, radix: u32) -> (i64, &
         let end = s
             .find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '$')
             .unwrap_or(s.len());
-        let sym = s[..end].to_ascii_uppercase();
+        let sym = canonicalize_symbol_name(&s[..end]);
         let val = syms.get(&sym).copied().unwrap_or(0);
         return (val, &s[end..]);
     }

@@ -2,6 +2,14 @@ use anyhow::{Result, anyhow};
 use std::collections::HashMap;
 use tracing::trace;
 
+pub fn canonicalize_symbol_name(name: &str) -> String {
+    name.trim()
+        .chars()
+        .take(6)
+        .collect::<String>()
+        .to_ascii_uppercase()
+}
+
 /// Symbol table with arithmetic expression evaluation.
 ///
 /// Arithmetic operators: `+` `-` `*` `/` `&` (AND) `!` (OR) `-` (unary)
@@ -19,15 +27,15 @@ impl SymTable {
 
     pub fn set(&mut self, name: &str, val: i64) {
         trace!(target: "assembler6502::symbols", "set {} = {}", name, val);
-        self.values.insert(name.to_ascii_uppercase(), val);
+        self.values.insert(canonicalize_symbol_name(name), val);
     }
 
     pub fn get(&self, name: &str) -> Option<i64> {
-        self.values.get(&name.to_ascii_uppercase()).copied()
+        self.values.get(&canonicalize_symbol_name(name)).copied()
     }
 
     pub fn is_defined(&self, name: &str) -> bool {
-        self.values.contains_key(&name.to_ascii_uppercase())
+        self.values.contains_key(&canonicalize_symbol_name(name))
     }
 
     pub fn eval(&self, expr: &str) -> Result<i64> {
@@ -41,6 +49,26 @@ impl SymTable {
             return Err(anyhow!("unexpected tokens after expression in {:?}", expr));
         }
         Ok(val)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{SymTable, canonicalize_symbol_name};
+
+    #[test]
+    fn canonicalizes_to_six_significant_characters() {
+        assert_eq!(canonicalize_symbol_name("restore"), "RESTOR");
+        assert_eq!(canonicalize_symbol_name("RESTOR"), "RESTOR");
+    }
+
+    #[test]
+    fn resolves_truncated_symbol_aliases() {
+        let mut symbols = SymTable::new();
+        symbols.set("RESTOR", 0x1234);
+
+        assert_eq!(symbols.get("RESTORE"), Some(0x1234));
+        assert!(symbols.is_defined("restore"));
     }
 }
 

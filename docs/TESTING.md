@@ -72,7 +72,7 @@ cargo test -p emu6502 --test interpreter_tests -- --nocapture
 ## Current Test Status
 
 With `build/original/basic.bin` present, the interpreter integration suite currently has:
-- 21 passing tests in the normal lane
+- 40 passing tests in the normal lane
 - 0 ignored known-failure coverage targets
 
 Current direct command:
@@ -127,6 +127,11 @@ Current tests cover:
 - `expressions.bas` - Variable expressions and arithmetic
 - `arrays.bas` - DIM and indexed array assignment/access
 - `array_bounds_error.bas` - BAD SUBSCRIPT detection for out-of-range array access
+- `def_fn.bas` - DEF FN user-defined function evaluation
+- `string_builtins.bas` - ASC/CHR$/STR$/VAL/LEFT$/RIGHT$/MID$
+- `advanced_math.bas` - SQR/COS/SIN/TAN/EXP/LOG/ATN built-ins
+- `fibonacci_sequence.bas` - Iterative Fibonacci sequence generation
+- `string_sort.bas` - Multi-pass bubble sort over a string array with DATA-fed input
 
 ### Control Flow
 - `for_loop.bas` - FOR/NEXT loops
@@ -135,17 +140,57 @@ Current tests cover:
 - `conditional.bas` - IF/THEN statements
 - `relops.bas` - Additional relational operators (`<>`, `>=`, `<=`)
 - `goto.bas` - GOTO branch control flow
+- `go_to_alias.bas` - `GO TO` spelling variant
 - `gosub.bas` - GOSUB/RETURN subroutines
 - `if_gosub.bas` - IF/THEN combined with GOSUB
 - `gosub_state.bas` - Variable mutation across subroutine calls
+- `on_goto.bas` - `ON ... GOTO` dispatch
+- `logic_ops.bas` - `NOT`, `AND`, and `OR`
+- `rem_statement.bas` - `REM` statement handling
+- `restore_smoke.bas` - Minimal `RESTORE` statement dispatch smoke test
+- `restore_read.bas` - `RESTORE` rewinds `READ` back to the start of `DATA`
+- `clear_state.bas` - `CLEAR` resets variable state inside a running program
+
+### Interactive Input
+- `input_sum.bas` - Minimal `INPUT` smoke test using checked-in stdin-style fixture lines
+- `gcd_input.bas` - Interactive Euclidean GCD program using `INPUT`
+- `get_char.bas` - Minimal `GET` smoke test using checked-in character input
+- `get_loop.bas` - `GET` loop regression that consumes multiple sequential characters
+- `interactive_stars.bas` - Input-driven star banner adapted from a common BASIC teaching example
+
+### Internet-Inspired Examples
+- `hello_repeat.bas` - Adapted from the fixed-count FOR/NEXT "Hello, World!" example shown in the Wikipedia BASIC article
+- `stars_banner.bas` - Adapted from the Wikipedia BASIC star-printing example, simplified for non-interactive automated testing
+- `interactive_stars.bas` - Adapted from the interactive star-printing example shown in the Wikipedia BASIC article and driven by a checked-in input fixture
+
+## Token Coverage
+
+Using the active Apple II token table from `m6502.asm` (that is, the `DCI"..."` entries that are enabled for the current `REALIO=4`, `EXTIO=0`, `DISKO=0`, `NULCMD=0`, `GETCMD=1` build):
+
+- Statement and reserved-word coverage is 28 / 34 tokens = 82.4% if `RUN` is counted via the harness, which enters each program and executes it with a `RUN` command.
+- Direct statement coverage from checked-in `.bas` fixtures alone is 27 / 34 tokens = 79.4%.
+- Built-in function coverage is 17 / 23 functions = 73.9%.
+- Built-in function coverage is 18 / 23 functions = 78.3%.
+
+Currently covered statement/reserved-word tokens include:
+- `END`, `FOR`, `NEXT`, `DATA`, `INPUT`, `DIM`, `READ`, `LET`, `GOTO`, `RUN`, `IF`, `RESTORE`, `GOSUB`, `RETURN`, `REM`, `ON`, `DEF`, `PRINT`, `CLEAR`, `GET`, `TO`, `FN`, `THEN`, `NOT`, `STEP`, `AND`, `OR`, `GO`
+
+Currently covered built-in functions include:
+- `SGN`, `INT`, `ABS`, `SQR`, `LOG`, `EXP`, `COS`, `SIN`, `TAN`, `ATN`, `LEN`, `STR$`, `VAL`, `ASC`, `CHR$`, `LEFT$`, `RIGHT$`, `MID$`
+
+Not yet covered by the interpreter fixtures are statement/reserved-word tokens such as:
+- `STOP`, `WAIT`, `POKE`, `CONT`, `LIST`, `NEW`
+
+Not yet covered by the interpreter fixtures are built-in functions such as:
+- `USR`, `FRE`, `POS`, `RND`, `PEEK`
 
 ## Future Enhancements
 
 Useful next additions would be:
-- String operations
-- More complex expressions
-- Error handling
-- Mathematical functions (SIN, COS, etc.)
+- Additional interactive input coverage (multi-prompt `GET`/`INPUT` flows)
+- State-management commands (`CONT`, `NEW`)
+- Memory and machine-facing functions (`PEEK`, `POKE`, `USR`, `FRE`, `POS`)
+- Random/trig remainder (`RND`, `ATN`)
 
 Known currently failing probe areas:
 - None in the checked-in interpreter integration suite at the moment

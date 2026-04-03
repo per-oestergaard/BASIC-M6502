@@ -122,6 +122,15 @@ impl BasicHarness {
         program: &str,
         max_cycles: u64,
     ) -> Result<String, String> {
+        Self::run_apple_ii_basic_with_inputs(binary_path, program, &[], max_cycles)
+    }
+
+    pub fn run_apple_ii_basic_with_inputs(
+        binary_path: &str,
+        program: &str,
+        runtime_inputs: &[String],
+        max_cycles: u64,
+    ) -> Result<String, String> {
         use std::fs;
 
         // ── Load the flat binary image at $0000 ──────────────────────────────
@@ -149,12 +158,14 @@ impl BasicHarness {
         // high-bit-set characters in BUF, with X set to the character count.
         // INLIN appends the trailing NUL itself for REALIO=4.
         let lines: Rc<RefCell<VecDeque<Vec<u8>>>> = Rc::new(RefCell::new(VecDeque::new()));
+        let chars: Rc<RefCell<VecDeque<u8>>> = Rc::new(RefCell::new(VecDeque::new()));
         let trace_steps: Rc<RefCell<usize>> = Rc::new(RefCell::new(0));
         let after_run: Rc<RefCell<bool>> = Rc::new(RefCell::new(false));
         let run_output_start: Rc<RefCell<Option<usize>>> = Rc::new(RefCell::new(None));
 
         {
             let mut q = lines.borrow_mut();
+            let mut cq = chars.borrow_mut();
             // Apple BASIC cold-start prompts for memory size and terminal width
             // before it reaches the main READY loop. Supply an explicit memory
             // size so the interpreter does not perform its destructive RAM probe
@@ -173,6 +184,10 @@ impl BasicHarness {
             // Feed "RUN" after the program
             let run_bytes: Vec<u8> = b"RUN".iter().map(|b| b | 0x80).collect();
             q.push_back(run_bytes);
+            for line in runtime_inputs {
+                q.push_back(encode_basic_line(line));
+                cq.extend(line.to_ascii_uppercase().bytes());
+            }
         }
 
         // ── I/O hooks via exec traps ─────────────────────────────────────────
@@ -227,6 +242,21 @@ impl BasicHarness {
             } else {
                 // No more input - this should cause the test to complete or timeout
                 trace!(target: "emu6502::harness", "GETLN exhausted input; halting CPU");
+                cpu.halted = true;
+            }
+            cpu.trap_rts();
+        });
+
+        // $FD0C = Apple II character input routine used by GET via INCHR.
+        // Feed sequential bytes from the same checked-in runtime input fixture.
+        let char_queue = chars.clone();
+        cpu.hook_exec(0xFD0C, move |cpu| {
+            if let Some(ch) = char_queue.borrow_mut().pop_front() {
+                trace!(target: "emu6502::harness", a = ch, ch = %format_output_char(ch), "CQINCH hook");
+                cpu.a = ch;
+            } else {
+                trace!(target: "emu6502::harness", "CQINCH exhausted input; halting CPU");
+                cpu.a = 0;
                 cpu.halted = true;
             }
             cpu.trap_rts();
@@ -357,6 +387,9 @@ impl BasicHarness {
             let new_len = buf.len();
             if new_len > last_output_len {
                 last_output_len = new_len;
+                if *after_run.borrow() && basic_command_completed(&buf) {
+                    break "ok prompt";
+                }
                 // "]" followed by CR is the BASIC prompt after execution
                 let s: &[u8] = &buf;
                 if s.windows(2).any(|w| w == b"]\r" || w == b"]\n") {
@@ -435,11 +468,24 @@ impl BasicHarness {
     }
 }
 
+fn encode_basic_line(line: &str) -> Vec<u8> {
+    line.to_ascii_uppercase()
+        .bytes()
+        .map(|byte| byte | 0x80)
+        .collect()
+}
+
 fn normalize_basic_output(text: &str) -> String {
     text.split('\n')
         .map(|line| line.trim_end_matches(' '))
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+fn basic_command_completed(output: &[u8]) -> bool {
+    output.ends_with(b"\r\nOK\r\n")
+        || output.ends_with(b"\nOK\r\n")
+        || output.ends_with(b"\rOK\r")
 }
 
 #[cfg(test)]
