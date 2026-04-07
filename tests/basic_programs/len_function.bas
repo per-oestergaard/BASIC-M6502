@@ -1,0 +1,5 @@
+10 A$="HELLO"
+20 PRINT LEN(A$)
+30 B$=""
+40 PRINT LEN(B$)
+50 END

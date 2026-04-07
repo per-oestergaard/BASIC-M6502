@@ -1,0 +1,3 @@
+10 X=5:Y=10:Z=X+Y
+20 PRINT X;Y;Z
+30 END

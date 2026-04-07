@@ -368,3 +368,131 @@ fn test_error_overflow() {
 // fn test_error_formula_too_complex() {
 //     test_basic_program("error_formula_too_complex");
 // }
+
+// ── Additional Feature Tests ───────────────────────────────────────────────────
+
+#[test]
+fn test_stop_statement() {
+    test_basic_program("stop_statement");
+}
+
+#[test]
+fn test_negative_step() {
+    test_basic_program("negative_step");
+}
+
+#[test]
+fn test_asc_chr() {
+    test_basic_program("asc_chr");
+}
+
+#[test]
+fn test_tab_function() {
+    test_basic_program("tab_function");
+}
+
+#[test]
+fn test_multiple_statements() {
+    test_basic_program("multiple_statements");
+}
+
+#[test]
+fn test_string_slicing() {
+    test_basic_program("string_slicing");
+}
+
+#[test]
+fn test_print_semicolon() {
+    test_basic_program("print_semicolon");
+}
+
+#[test]
+fn test_print_comma() {
+    test_basic_program("print_comma");
+}
+
+#[test]
+fn test_if_then_goto() {
+    test_basic_program("if_then_goto");
+}
+
+#[test]
+fn test_abs_int() {
+    test_basic_program("abs_int");
+}
+
+#[test]
+fn test_len_function() {
+    test_basic_program("len_function");
+}
+
+#[test]
+fn test_nested_if() {
+    test_basic_program("nested_if");
+}
+
+#[test]
+fn test_restore_data() {
+    test_basic_program("restore_data");
+}
+
+#[test]
+fn test_multiple_arrays() {
+    test_basic_program("multiple_arrays");
+}
+
+#[test]
+fn test_nested_gosub() {
+    test_basic_program("nested_gosub");
+}
+
+// ── Memory and System Functions ────────────────────────────────────────────────
+
+#[test]
+fn test_peek_poke() {
+    test_basic_program("peek_poke");
+}
+
+#[test]
+fn test_fre_function() {
+    test_basic_program("fre_function");
+}
+
+#[test]
+fn test_pos_function() {
+    test_basic_program("pos_function");
+}
+
+#[test]
+fn test_spc_function() {
+    test_basic_program("spc_function");
+}
+
+// ── Conversion Functions ───────────────────────────────────────────────────────
+
+#[test]
+fn test_sgn_function() {
+    test_basic_program("sgn_function");
+}
+
+#[test]
+fn test_val_str() {
+    test_basic_program("val_str");
+}
+
+// ── Additional Coverage ────────────────────────────────────────────────────────
+
+#[test]
+fn test_new_command() {
+    test_basic_program("new_command");
+}
+
+#[test]
+fn test_implicit_let() {
+    test_basic_program("implicit_let");
+}
+
+#[test]
+fn test_nested_for_print() {
+    test_basic_program("nested_for_print");
+}
