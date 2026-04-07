@@ -66,12 +66,20 @@ __LJ0:
 
 ---
 
-## Rust
+## Rust Rules
 
 - Remove unused variables. If they for some reason are needed, prefix them with _ to get rid of the warning.
 - Format Rust code as normal
-- Use rust edition 2024
-- Avoid mutable variables where possible, and prefer functional style.
+- Use rust edition 2024 and do not use features from rust edition before 2024 if a better alternative exists in 2024. For example, use `let` expressions instead of `if let` where possible, and use the new `match` ergonomics.
+- Use English for all variable names, comments, and documentation.
+- Avoid mutable variables where possible
+- prefer functional style
 - Never use unsafe rust, and never use external C libraries or bindings. The entire codebase should be pure safe Rust.
-- wire code using with tracing for diagnosis, and never use grep/sed/awk/od on source or binary files for diagnosis. Read the files directly or run the code with RUST_LOG=trace (or a targeted filter) and read the trace output instead.
+- never use grep/sed/awk/od on source or binary files for diagnosis. Read the files directly or run the code with RUST_LOG=trace (or a targeted filter) and read the trace output instead.
 - cloning is fine when it makes the code simpler and more readable, so don't be afraid to clone when needed. The codebase is small enough that performance is not a concern at this stage, so prioritise readability and simplicity over micro-optimisations.
+
+## Rust interpreter
+
+As the emulator is finished, the next step is to implement the BASIC interpreter in Rust. The interpreter must read and interpret BASIC directly. E.g., it has not benefit from using the assembler nor the emulator.
+
+The interpreter is its own crate. The success criteria is to run the same suite of BASIC test (in tests/basic_programs/) and get the same output as the original BASIC interpreter. It should also support an interactive mode and the same commands as emu6502/examples/interactive.rs.
