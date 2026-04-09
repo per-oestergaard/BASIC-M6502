@@ -130,6 +130,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Ok(output) => {
                     if !output.trim().is_empty() {
                         print!("{}", output);
+                        if !output.ends_with('\n') {
+                            println!();
+                        }
                     }
                 }
                 Err(e) => eprintln!("Runtime error: {}", e),
@@ -177,8 +180,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             continue;
         }
 
-        // Try to execute as immediate command (wrap in line 10)
-        let immediate_program = format!("10 {}", line);
+        // Try to execute as immediate command (wrap in line 0 for direct mode)
+        let immediate_program = format!("0 {}", line);
         let program = match parser::parse(&immediate_program) {
             Ok(program) => program,
             Err(e) => {
@@ -192,6 +195,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(output) => {
                 if !output.trim().is_empty() {
                     print!("{}", output);
+                    if !output.ends_with('\n') {
+                        println!();
+                    }
                 }
             }
             Err(e) => eprintln!("Runtime error: {}", e),

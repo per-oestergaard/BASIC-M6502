@@ -1,63 +1,64 @@
+Radix(10)
 Label("$Z")
 Org(0)
-Equate { name: "REALIO", value: 4 }
-Equate { name: "INTPRC", value: 1 }
-Equate { name: "ADDPRC", value: 1 }
-Equate { name: "LNGERR", value: 0 }
-Equate { name: "TIME", value: 0 }
-Equate { name: "EXTIO", value: 0 }
-Equate { name: "DISKO", value: 0 }
-Equate { name: "NULCMD", value: 1 }
-Equate { name: "GETCMD", value: 1 }
-Equate { name: "RORSW", value: 1 }
-Equate { name: "ROMSW", value: 1 }
-Equate { name: "CLMWID", value: 14 }
-Equate { name: "LONGI", value: 1 }
-Equate { name: "STKEND", value: 511 }
-Equate { name: "BUFPAG", value: 0 }
-Equate { name: "LINLEN", value: 72 }
-Equate { name: "BUFLEN", value: 72 }
-Equate { name: "ROMLOC", value: 8192 }
-Equate { name: "KIMROM", value: 1 }
-Equate { name: "KIMROM", value: 0 }
-Equate { name: "RAMLOC", value: 16384 }
-Equate { name: "RORSW", value: 1 }
-Equate { name: "NULCMD", value: 0 }
-Equate { name: "GETCMD", value: 1 }
-Equate { name: "CQINLN", value: 64871 }
-Equate { name: "CQPRMP", value: 51 }
-Equate { name: "CQINCH", value: 64780 }
-Equate { name: "CQCOUT", value: 65229 }
-Equate { name: "CQCSIN", value: 65277 }
-Equate { name: "BUFPAG", value: 2 }
-Equate { name: "BUF", value: 512 }
-Equate { name: "ROMLOC", value: 2048 }
-Equate { name: "RAMLOC", value: 10752 }
-Equate { name: "OUTCH", value: 65005 }
-Equate { name: "CZGETL", value: 64780 }
-Equate { name: "LINLEN", value: 40 }
-Equate { name: "BUFLEN", value: 240 }
-Equate { name: "RORSW", value: 1 }
-Equate { name: "STKEND", value: 507 }
-Equate { name: "NUMLEV", value: 23 }
-Equate { name: "STRSIZ", value: 3 }
-Equate { name: "NUMTMP", value: 3 }
-Equate { name: "CONTW", value: 15 }
+Equate { name: "REALIO", expr: "4" }
+Equate { name: "INTPRC", expr: "1" }
+Equate { name: "ADDPRC", expr: "1" }
+Equate { name: "LNGERR", expr: "0" }
+Equate { name: "TIME", expr: "0" }
+Equate { name: "EXTIO", expr: "0" }
+Equate { name: "DISKO", expr: "0" }
+Equate { name: "NULCMD", expr: "1" }
+Equate { name: "GETCMD", expr: "1" }
+Equate { name: "RORSW", expr: "1" }
+Equate { name: "ROMSW", expr: "1" }
+Equate { name: "CLMWID", expr: "14" }
+Equate { name: "LONGI", expr: "1" }
+Equate { name: "STKEND", expr: "511" }
+Equate { name: "BUFPAG", expr: "0" }
+Equate { name: "LINLEN", expr: "72" }
+Equate { name: "BUFLEN", expr: "72" }
+Equate { name: "ROMLOC", expr: "^O20000" }
+Equate { name: "KIMROM", expr: "1" }
+Equate { name: "KIMROM", expr: "0" }
+Equate { name: "RAMLOC", expr: "^O40000" }
+Equate { name: "RORSW", expr: "1" }
+Equate { name: "NULCMD", expr: "0" }
+Equate { name: "GETCMD", expr: "1" }
+Equate { name: "CQINLN", expr: "^O176547" }
+Equate { name: "CQPRMP", expr: "^O63" }
+Equate { name: "CQINCH", expr: "^O176414" }
+Equate { name: "CQCOUT", expr: "^O177315" }
+Equate { name: "CQCSIN", expr: "^O177375" }
+Equate { name: "BUFPAG", expr: "2" }
+Equate { name: "BUF", expr: "BUFPAG*256" }
+Equate { name: "ROMLOC", expr: "^O4000" }
+Equate { name: "RAMLOC", expr: "^O25000" }
+Equate { name: "OUTCH", expr: "^O176755" }
+Equate { name: "CZGETL", expr: "^O176414" }
+Equate { name: "LINLEN", expr: "40" }
+Equate { name: "BUFLEN", expr: "240" }
+Equate { name: "RORSW", expr: "1" }
+Equate { name: "STKEND", expr: "507" }
+Equate { name: "NUMLEV", expr: "23" }
+Equate { name: "STRSIZ", expr: "3" }
+Equate { name: "NUMTMP", expr: "3" }
+Equate { name: "CONTW", expr: "15" }
 Instr { label: Some("START"), mnemonic: "JMP", operand: Some("INIT") }
 Instr { label: Some("RDYJSR"), mnemonic: "JMP", operand: Some("INIT") }
-Label("ADRAYI")
-Label("ADRGAY")
+Word { label: Some("ADRAYI"), expr: "AYINT" }
+Word { label: Some("ADRGAY"), expr: "GIVAYF" }
 Instr { label: Some("USRPOK"), mnemonic: "JMP", operand: Some("FCERR") }
 Res { label: Some("CHARAC"), count: 1 }
-Equate { name: "INTEGR", value: 0 }
+Equate { name: "INTEGR", expr: "CHARAC" }
 Res { label: Some("ENDCHR"), count: 1 }
 Res { label: Some("COUNT"), count: 1 }
 Res { label: Some("DIMFLG"), count: 1 }
-Equate { name: "KIMY", value: 0 }
+Equate { name: "KIMY", expr: "DIMFLG" }
 Res { label: Some("VALTYP"), count: 1 }
 Res { label: Some("INTFLG"), count: 1 }
 Res { label: Some("DORES"), count: 1 }
-Equate { name: "GARBFL", value: 0 }
+Equate { name: "GARBFL", expr: "DORES" }
 Res { label: Some("SUBFLG"), count: 1 }
 Res { label: Some("INPFLG"), count: 1 }
 Res { label: Some("TANSGN"), count: 1 }
@@ -72,13 +73,13 @@ Res { label: Some("TEMPPT"), count: 1 }
 Res { label: Some("LASTPT"), count: 2 }
 Res { label: Some("TEMPST"), count: 9 }
 Res { label: Some("INDEX1"), count: 2 }
-Equate { name: "INDEX", value: 0 }
+Equate { name: "INDEX", expr: "INDEX1" }
 Res { label: Some("INDEX2"), count: 2 }
 Res { label: Some("RESHO"), count: 1 }
 Res { label: Some("RESMOH"), count: 1 }
 Res { label: Some("RESMO"), count: 1 }
 Res { label: Some("RESLO"), count: 1 }
-Equate { name: "ADDEND", value: 0 }
+Equate { name: "ADDEND", expr: "RESMO" }
 Bytes { label: None, values: ["0"] }
 Res { label: Some("TXTTAB"), count: 2 }
 Res { label: Some("VARTAB"), count: 2 }
@@ -89,31 +90,31 @@ Res { label: Some("FRESPC"), count: 2 }
 Res { label: Some("MEMSIZ"), count: 2 }
 Res { label: Some("CURLIN"), count: 2 }
 Res { label: Some("OLDLIN"), count: 2 }
-Equate { name: "POKER", value: 0 }
+Equate { name: "POKER", expr: "LINNUM" }
 Res { label: Some("OLDTXT"), count: 2 }
 Res { label: Some("DATLIN"), count: 2 }
 Res { label: Some("DATPTR"), count: 2 }
 Res { label: Some("INPPTR"), count: 2 }
 Res { label: Some("VARNAM"), count: 2 }
 Res { label: Some("VARPNT"), count: 2 }
-Equate { name: "FDECPT", value: 0 }
+Equate { name: "FDECPT", expr: "VARPNT" }
 Res { label: Some("FORPNT"), count: 2 }
-Equate { name: "LSTPNT", value: 0 }
-Equate { name: "ANDMSK", value: 0 }
-Equate { name: "EORMSK", value: 1 }
+Equate { name: "LSTPNT", expr: "FORPNT" }
+Equate { name: "ANDMSK", expr: "FORPNT" }
+Equate { name: "EORMSK", expr: "FORPNT+1" }
 Res { label: Some("OPPTR"), count: 2 }
-Equate { name: "VARTXT", value: 0 }
+Equate { name: "VARTXT", expr: "OPPTR" }
 Res { label: Some("OPMASK"), count: 1 }
-Equate { name: "DOMASK", value: 0 }
+Equate { name: "DOMASK", expr: "TANSGN" }
 Res { label: Some("DEFPNT"), count: 2 }
-Equate { name: "GRBPNT", value: 0 }
+Equate { name: "GRBPNT", expr: "DEFPNT" }
 Res { label: Some("DSCPNT"), count: 2 }
 Res { label: None, count: 1 }
-Label("FOUR6")
+Bytes { label: Some("FOUR6"), values: ["STRSIZ"] }
 Instr { label: Some("JMPER"), mnemonic: "JMP", operand: Some("60000") }
-Equate { name: "SIZE", value: 1 }
-Equate { name: "OLDOV", value: 2 }
-Equate { name: "TEMPF3", value: 0 }
+Equate { name: "SIZE", expr: "JMPER+1" }
+Equate { name: "OLDOV", expr: "JMPER+2" }
+Equate { name: "TEMPF3", expr: "DEFPNT" }
 Label("TEMPF1")
 Bytes { label: None, values: ["0"] }
 Res { label: Some("HIGHDS"), count: 2 }
@@ -122,12 +123,12 @@ Label("TEMPF2")
 Bytes { label: None, values: ["0"] }
 Res { label: Some("LOWDS"), count: 2 }
 Res { label: Some("LOWTR"), count: 2 }
-Equate { name: "ARYPNT", value: 0 }
-Equate { name: "GRBTOP", value: 0 }
-Equate { name: "DECCNT", value: 0 }
-Equate { name: "TENEXP", value: 1 }
-Equate { name: "DPTFLG", value: 0 }
-Equate { name: "EXPSGN", value: 1 }
+Equate { name: "ARYPNT", expr: "HIGHDS" }
+Equate { name: "GRBTOP", expr: "LOWTR" }
+Equate { name: "DECCNT", expr: "LOWDS" }
+Equate { name: "TENEXP", expr: "LOWDS+1" }
+Equate { name: "DPTFLG", expr: "LOWTR" }
+Equate { name: "EXPSGN", expr: "LOWTR+1" }
 Label("FAC")
 Bytes { label: Some("FACEXP"), values: ["0"] }
 Bytes { label: Some("FACHO"), values: ["0"] }
@@ -136,9 +137,9 @@ Bytes { label: Some("FACMO"), values: ["0"] }
 Bytes { label: Some("FACLO"), values: ["0"] }
 Bytes { label: Some("FACSGN"), values: ["0"] }
 Bytes { label: Some("SGNFLG"), values: ["0"] }
-Equate { name: "DEGREE", value: 0 }
-Equate { name: "DSCTMP", value: 0 }
-Equate { name: "INDICE", value: 0 }
+Equate { name: "DEGREE", expr: "SGNFLG" }
+Equate { name: "DSCTMP", expr: "FAC" }
+Equate { name: "INDICE", expr: "FACMO" }
 Bytes { label: Some("BITS"), values: ["0"] }
 Bytes { label: Some("ARGEXP"), values: ["0"] }
 Bytes { label: Some("ARGHO"), values: ["0"] }
@@ -148,17 +149,17 @@ Bytes { label: Some("ARGLO"), values: ["0"] }
 Bytes { label: Some("ARGSGN"), values: ["0"] }
 Bytes { label: Some("ARISGN"), values: ["0"] }
 Bytes { label: Some("FACOV"), values: ["0"] }
-Equate { name: "STRNG1", value: 0 }
+Equate { name: "STRNG1", expr: "ARISGN" }
 Res { label: Some("FBUFPT"), count: 2 }
-Equate { name: "BUFPTR", value: 0 }
-Equate { name: "STRNG2", value: 0 }
-Equate { name: "POLYPT", value: 0 }
-Equate { name: "CURTOL", value: 0 }
+Equate { name: "BUFPTR", expr: "FBUFPT" }
+Equate { name: "STRNG2", expr: "FBUFPT" }
+Equate { name: "POLYPT", expr: "FBUFPT" }
+Equate { name: "CURTOL", expr: "FBUFPT" }
 Instr { label: Some("CHRGET"), mnemonic: "INC", operand: Some("CHRGET+7") }
 Instr { label: None, mnemonic: "BNE", operand: Some("CHRGOT") }
 Instr { label: None, mnemonic: "INC", operand: Some("CHRGET+8") }
 Instr { label: Some("CHRGOT"), mnemonic: "LDA", operand: Some("60000") }
-Equate { name: "TXTPTR", value: 1 }
+Equate { name: "TXTPTR", expr: "CHRGOT+1" }
 Instr { label: None, mnemonic: "CMP", operand: Some("#\" \"") }
 Instr { label: None, mnemonic: "BEQ", operand: Some("CHRGET") }
 Label("QNUM")
@@ -178,160 +179,293 @@ Org(255)
 Res { label: Some("LOFBUF"), count: 1 }
 Res { label: Some("FBUFFR"), count: 16 }
 Org(2048)
-Label("STMDSP")
-Label("FUNDSP")
-Label("USRLOC")
-Label("COSFIX")
-Label("SINFIX")
-Label("TANFIX")
-Label("ATNFIX")
+Word { label: Some("STMDSP"), expr: "END-1" }
+Word { label: None, expr: "FOR-1" }
+Word { label: None, expr: "NEXT-1" }
+Word { label: None, expr: "DATA-1" }
+Word { label: None, expr: "INPUT-1" }
+Word { label: None, expr: "DIM-1" }
+Word { label: None, expr: "READ-1" }
+Word { label: None, expr: "LET-1" }
+Word { label: None, expr: "GOTO-1" }
+Word { label: None, expr: "RUN-1" }
+Word { label: None, expr: "IF-1" }
+Word { label: None, expr: "RESTORE-1" }
+Word { label: None, expr: "GOSUB-1" }
+Word { label: None, expr: "RETURN-1" }
+Word { label: None, expr: "REM-1" }
+Word { label: None, expr: "STOP-1" }
+Word { label: None, expr: "ONGOTO-1" }
+Word { label: None, expr: "FNWAIT-1" }
+Word { label: None, expr: "DEF-1" }
+Word { label: None, expr: "POKE-1" }
+Word { label: None, expr: "PRINT-1" }
+Word { label: None, expr: "CONT-1" }
+Word { label: None, expr: "LIST-1" }
+Word { label: None, expr: "CLEAR-1" }
+Word { label: None, expr: "GET-1" }
+Word { label: None, expr: "SCRATH-1" }
+Word { label: Some("FUNDSP"), expr: "SGN" }
+Word { label: None, expr: "INT" }
+Word { label: None, expr: "ABS" }
+Word { label: Some("USRLOC"), expr: "USRPOK" }
+Word { label: None, expr: "FRE" }
+Word { label: None, expr: "POS" }
+Word { label: None, expr: "SQR" }
+Word { label: None, expr: "RND" }
+Word { label: None, expr: "LOG" }
+Word { label: None, expr: "EXP" }
+Word { label: Some("COSFIX"), expr: "COS" }
+Word { label: Some("SINFIX"), expr: "SIN" }
+Word { label: Some("TANFIX"), expr: "TAN" }
+Word { label: Some("ATNFIX"), expr: "ATN" }
+Word { label: None, expr: "PEEK" }
+Word { label: None, expr: "LEN" }
+Word { label: None, expr: "STR" }
+Word { label: None, expr: "VAL" }
+Word { label: None, expr: "ASC" }
+Word { label: None, expr: "CHR" }
+Word { label: None, expr: "LEFT" }
+Word { label: None, expr: "RIGHT" }
+Word { label: None, expr: "MID" }
 Bytes { label: Some("OPTAB"), values: ["121"] }
+Word { label: None, expr: "FADDT-1" }
 Bytes { label: None, values: ["121"] }
+Word { label: None, expr: "FSUBT-1" }
 Bytes { label: None, values: ["123"] }
+Word { label: None, expr: "FMULTT-1" }
 Bytes { label: None, values: ["123"] }
+Word { label: None, expr: "FDIVT-1" }
 Bytes { label: None, values: ["127"] }
+Word { label: None, expr: "FPWRT-1" }
 Bytes { label: None, values: ["80"] }
+Word { label: None, expr: "ANDOP-1" }
 Bytes { label: None, values: ["70"] }
+Word { label: None, expr: "OROP-1" }
 Bytes { label: Some("NEGTAB"), values: ["125"] }
+Word { label: None, expr: "NEGOP-1" }
 Bytes { label: Some("NOTTAB"), values: ["90"] }
+Word { label: None, expr: "NOTOP-1" }
 Bytes { label: Some("PTDORL"), values: ["100"] }
-Equate { name: "Q", value: 127 }
-Bytes { label: Some("RESLST"), values: ["$C5", "$CE", "$C4"] }
-Equate { name: "ENDTK", value: 127 }
-Bytes { label: None, values: ["$C6", "$CF", "$D2"] }
-Equate { name: "FORTK", value: 127 }
-Bytes { label: None, values: ["$CE", "$C5", "$D8", "$D4"] }
-Bytes { label: None, values: ["$C4", "$C1", "$D4", "$C1"] }
-Equate { name: "DATATK", value: 127 }
-Bytes { label: None, values: ["$C9", "$CE", "$D0", "$D5", "$D4"] }
-Bytes { label: None, values: ["$C4", "$C9", "$CD"] }
-Bytes { label: None, values: ["$D2", "$C5", "$C1", "$C4"] }
-Bytes { label: None, values: ["$CC", "$C5", "$D4"] }
-Bytes { label: None, values: ["$C7", "$CF", "$D4", "$CF"] }
-Equate { name: "GOTOTK", value: 127 }
-Bytes { label: None, values: ["$D2", "$D5", "$CE"] }
-Bytes { label: None, values: ["$C9", "$C6"] }
-Bytes { label: None, values: ["$D2", "$C5", "$D3", "$D4", "$CF", "$D2", "$C5"] }
-Bytes { label: None, values: ["$C7", "$CF", "$D3", "$D5", "$C2"] }
-Equate { name: "GOSUTK", value: 127 }
-Bytes { label: None, values: ["$D2", "$C5", "$D4", "$D5", "$D2", "$CE"] }
-Bytes { label: None, values: ["$D2", "$C5", "$CD"] }
-Equate { name: "REMTK", value: 127 }
-Bytes { label: None, values: ["$D3", "$D4", "$CF", "$D0"] }
-Bytes { label: None, values: ["$CF", "$CE"] }
-Bytes { label: None, values: ["$D7", "$C1", "$C9", "$D4"] }
-Bytes { label: None, values: ["$C4", "$C5", "$C6"] }
-Bytes { label: None, values: ["$D0", "$CF", "$CB", "$C5"] }
-Bytes { label: None, values: ["$D0", "$D2", "$C9", "$CE", "$D4"] }
-Equate { name: "PRINTK", value: 127 }
-Bytes { label: None, values: ["$C3", "$CF", "$CE", "$D4"] }
-Bytes { label: None, values: ["$CC", "$C9", "$D3", "$D4"] }
-Bytes { label: None, values: ["$C3", "$CC", "$C5", "$C1", "$D2"] }
-Bytes { label: None, values: ["$C7", "$C5", "$D4"] }
-Bytes { label: None, values: ["$CE", "$C5", "$D7"] }
-Equate { name: "SCRATK", value: 127 }
+Word { label: None, expr: "DOREL-1" }
+Equate { name: "Q", expr: "128-1" }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: Some("RESLST"), values: ["$45", "$4E", "$C4"] }
+Equate { name: "ENDTK", expr: "Q" }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$46", "$4F", "$D2"] }
+Equate { name: "FORTK", expr: "Q" }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$4E", "$45", "$58", "$D4"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$44", "$41", "$54", "$C1"] }
+Equate { name: "DATATK", expr: "Q" }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$49", "$4E", "$50", "$55", "$D4"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$44", "$49", "$CD"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$52", "$45", "$41", "$C4"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$4C", "$45", "$D4"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$47", "$4F", "$54", "$CF"] }
+Equate { name: "GOTOTK", expr: "Q" }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$52", "$55", "$CE"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$49", "$C6"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$52", "$45", "$53", "$54", "$4F", "$52", "$C5"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$47", "$4F", "$53", "$55", "$C2"] }
+Equate { name: "GOSUTK", expr: "Q" }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$52", "$45", "$54", "$55", "$52", "$CE"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$52", "$45", "$CD"] }
+Equate { name: "REMTK", expr: "Q" }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$53", "$54", "$4F", "$D0"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$4F", "$CE"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$57", "$41", "$49", "$D4"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$44", "$45", "$C6"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$50", "$4F", "$4B", "$C5"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$50", "$52", "$49", "$4E", "$D4"] }
+Equate { name: "PRINTK", expr: "Q" }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$43", "$4F", "$4E", "$D4"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$4C", "$49", "$53", "$D4"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$43", "$4C", "$45", "$41", "$D2"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$47", "$45", "$D4"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$4E", "$45", "$D7"] }
+Equate { name: "SCRATK", expr: "Q" }
 Bytes { label: None, values: ["\"T\""] }
 Bytes { label: None, values: ["\"A\""] }
 Bytes { label: None, values: ["\"B\""] }
 Bytes { label: None, values: ["\"(\"+128"] }
-Equate { name: "Q", value: 128 }
-Equate { name: "TABTK", value: 128 }
-Bytes { label: None, values: ["$D4", "$CF"] }
-Equate { name: "TOTK", value: 128 }
-Bytes { label: None, values: ["$C6", "$CE"] }
-Equate { name: "FNTK", value: 128 }
+Equate { name: "Q", expr: "Q+1" }
+Equate { name: "TABTK", expr: "Q" }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$54", "$CF"] }
+Equate { name: "TOTK", expr: "Q" }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$46", "$CE"] }
+Equate { name: "FNTK", expr: "Q" }
 Bytes { label: None, values: ["\"S\""] }
 Bytes { label: None, values: ["\"P\""] }
 Bytes { label: None, values: ["\"C\""] }
 Bytes { label: None, values: ["\"(\"+128"] }
-Equate { name: "Q", value: 129 }
-Equate { name: "SPCTK", value: 129 }
-Bytes { label: None, values: ["$D4", "$C8", "$C5", "$CE"] }
-Equate { name: "THENTK", value: 129 }
-Bytes { label: None, values: ["$CE", "$CF", "$D4"] }
-Equate { name: "NOTTK", value: 129 }
-Bytes { label: None, values: ["$D3", "$D4", "$C5", "$D0"] }
-Equate { name: "STEPTK", value: 129 }
+Equate { name: "Q", expr: "Q+1" }
+Equate { name: "SPCTK", expr: "Q" }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$54", "$48", "$45", "$CE"] }
+Equate { name: "THENTK", expr: "Q" }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$4E", "$4F", "$D4"] }
+Equate { name: "NOTTK", expr: "Q" }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$53", "$54", "$45", "$D0"] }
+Equate { name: "STEPTK", expr: "Q" }
+Equate { name: "Q", expr: "Q+1" }
 Bytes { label: None, values: ["$AB"] }
-Equate { name: "PLUSTK", value: 129 }
+Equate { name: "PLUSTK", expr: "Q" }
+Equate { name: "Q", expr: "Q+1" }
 Bytes { label: None, values: ["$AD"] }
-Equate { name: "MINUTK", value: 129 }
+Equate { name: "MINUTK", expr: "Q" }
+Equate { name: "Q", expr: "Q+1" }
 Bytes { label: None, values: ["$AA"] }
+Equate { name: "Q", expr: "Q+1" }
 Bytes { label: None, values: ["$AF"] }
+Equate { name: "Q", expr: "Q+1" }
 Bytes { label: None, values: ["$DE"] }
-Bytes { label: None, values: ["$C1", "$CE", "$C4"] }
-Bytes { label: None, values: ["$CF", "$D2"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$41", "$4E", "$C4"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$4F", "$D2"] }
 Bytes { label: None, values: ["190"] }
-Equate { name: "Q", value: 130 }
-Equate { name: "GREATK", value: 130 }
+Equate { name: "Q", expr: "Q+1" }
+Equate { name: "GREATK", expr: "Q" }
+Equate { name: "Q", expr: "Q+1" }
 Bytes { label: None, values: ["$BD"] }
-Equate { name: "EQULTK", value: 130 }
+Equate { name: "EQULTK", expr: "Q" }
 Bytes { label: None, values: ["188"] }
-Equate { name: "Q", value: 131 }
-Equate { name: "LESSTK", value: 131 }
-Bytes { label: None, values: ["$D3", "$C7", "$CE"] }
-Equate { name: "ONEFUN", value: 131 }
-Bytes { label: None, values: ["$C9", "$CE", "$D4"] }
-Bytes { label: None, values: ["$C1", "$C2", "$D3"] }
-Bytes { label: None, values: ["$D5", "$D3", "$D2"] }
-Bytes { label: None, values: ["$C6", "$D2", "$C5"] }
-Bytes { label: None, values: ["$D0", "$CF", "$D3"] }
-Bytes { label: None, values: ["$D3", "$D1", "$D2"] }
-Bytes { label: None, values: ["$D2", "$CE", "$C4"] }
-Bytes { label: None, values: ["$CC", "$CF", "$C7"] }
-Bytes { label: None, values: ["$C5", "$D8", "$D0"] }
-Bytes { label: None, values: ["$C3", "$CF", "$D3"] }
-Bytes { label: None, values: ["$D3", "$C9", "$CE"] }
-Bytes { label: None, values: ["$D4", "$C1", "$CE"] }
-Bytes { label: None, values: ["$C1", "$D4", "$CE"] }
-Bytes { label: None, values: ["$D0", "$C5", "$C5", "$CB"] }
-Bytes { label: None, values: ["$CC", "$C5", "$CE"] }
-Bytes { label: None, values: ["$D3", "$D4", "$D2", "$A4"] }
-Bytes { label: None, values: ["$D6", "$C1", "$CC"] }
-Bytes { label: None, values: ["$C1", "$D3", "$C3"] }
-Bytes { label: None, values: ["$C3", "$C8", "$D2", "$A4"] }
-Equate { name: "LASNUM", value: 131 }
-Bytes { label: None, values: ["$CC", "$C5", "$C6", "$D4", "$A4"] }
-Bytes { label: None, values: ["$D2", "$C9", "$C7", "$C8", "$D4", "$A4"] }
-Bytes { label: None, values: ["$CD", "$C9", "$C4", "$A4"] }
-Bytes { label: None, values: ["$C7", "$CF"] }
-Equate { name: "GOTK", value: 131 }
+Equate { name: "Q", expr: "Q+1" }
+Equate { name: "LESSTK", expr: "Q" }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$53", "$47", "$CE"] }
+Equate { name: "ONEFUN", expr: "Q" }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$49", "$4E", "$D4"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$41", "$42", "$D3"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$55", "$53", "$D2"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$46", "$52", "$C5"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$50", "$4F", "$D3"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$53", "$51", "$D2"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$52", "$4E", "$C4"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$4C", "$4F", "$C7"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$45", "$58", "$D0"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$43", "$4F", "$D3"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$53", "$49", "$CE"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$54", "$41", "$CE"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$41", "$54", "$CE"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$50", "$45", "$45", "$CB"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$4C", "$45", "$CE"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$53", "$54", "$52", "$A4"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$56", "$41", "$CC"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$41", "$53", "$C3"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$43", "$48", "$52", "$A4"] }
+Equate { name: "LASNUM", expr: "Q" }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$4C", "$45", "$46", "$54", "$A4"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$52", "$49", "$47", "$48", "$54", "$A4"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$4D", "$49", "$44", "$A4"] }
+Equate { name: "Q", expr: "Q+1" }
+Bytes { label: None, values: ["$47", "$CF"] }
+Equate { name: "GOTK", expr: "Q" }
 Bytes { label: None, values: ["0"] }
-Equate { name: "Q", value: -2 }
-Bytes { label: Some("ERRTAB"), values: ["$4E", "$46"] }
-Equate { name: "ERRNF", value: -2 }
+Equate { name: "Q", expr: "0-2" }
+Label("ERRTAB")
+Equate { name: "Q", expr: "Q+2" }
+Bytes { label: None, values: ["$4E", "$46"] }
+Equate { name: "ERRNF", expr: "Q" }
+Equate { name: "Q", expr: "Q+2" }
 Bytes { label: None, values: ["$53", "$4E"] }
-Equate { name: "ERRSN", value: -2 }
+Equate { name: "ERRSN", expr: "Q" }
+Equate { name: "Q", expr: "Q+2" }
 Bytes { label: None, values: ["$52", "$47"] }
-Equate { name: "ERRRG", value: -2 }
+Equate { name: "ERRRG", expr: "Q" }
+Equate { name: "Q", expr: "Q+2" }
 Bytes { label: None, values: ["$4F", "$44"] }
-Equate { name: "ERROD", value: -2 }
+Equate { name: "ERROD", expr: "Q" }
+Equate { name: "Q", expr: "Q+2" }
 Bytes { label: None, values: ["$46", "$43"] }
-Equate { name: "ERRFC", value: -2 }
+Equate { name: "ERRFC", expr: "Q" }
+Equate { name: "Q", expr: "Q+2" }
 Bytes { label: None, values: ["$4F", "$56"] }
-Equate { name: "ERROV", value: -2 }
+Equate { name: "ERROV", expr: "Q" }
+Equate { name: "Q", expr: "Q+2" }
 Bytes { label: None, values: ["$4F", "$4D"] }
-Equate { name: "ERROM", value: -2 }
+Equate { name: "ERROM", expr: "Q" }
+Equate { name: "Q", expr: "Q+2" }
 Bytes { label: None, values: ["$55", "$53"] }
-Equate { name: "ERRUS", value: -2 }
+Equate { name: "ERRUS", expr: "Q" }
+Equate { name: "Q", expr: "Q+2" }
 Bytes { label: None, values: ["$42", "$53"] }
-Equate { name: "ERRBS", value: -2 }
+Equate { name: "ERRBS", expr: "Q" }
+Equate { name: "Q", expr: "Q+2" }
 Bytes { label: None, values: ["$44", "$44"] }
-Equate { name: "ERRDD", value: -2 }
+Equate { name: "ERRDD", expr: "Q" }
+Equate { name: "Q", expr: "Q+2" }
 Bytes { label: None, values: ["$2F", "$30"] }
-Equate { name: "ERRDV0", value: -2 }
+Equate { name: "ERRDV0", expr: "Q" }
+Equate { name: "Q", expr: "Q+2" }
 Bytes { label: None, values: ["$49", "$44"] }
-Equate { name: "ERRID", value: -2 }
+Equate { name: "ERRID", expr: "Q" }
+Equate { name: "Q", expr: "Q+2" }
 Bytes { label: None, values: ["$54", "$4D"] }
-Equate { name: "ERRTM", value: -2 }
+Equate { name: "ERRTM", expr: "Q" }
+Equate { name: "Q", expr: "Q+2" }
 Bytes { label: None, values: ["$4C", "$53"] }
-Equate { name: "ERRLS", value: -2 }
+Equate { name: "ERRLS", expr: "Q" }
+Equate { name: "Q", expr: "Q+2" }
 Bytes { label: None, values: ["$53", "$54"] }
-Equate { name: "ERRST", value: -2 }
+Equate { name: "ERRST", expr: "Q" }
+Equate { name: "Q", expr: "Q+2" }
 Bytes { label: None, values: ["$43", "$4E"] }
-Equate { name: "ERRCN", value: -2 }
+Equate { name: "ERRCN", expr: "Q" }
+Equate { name: "Q", expr: "Q+2" }
 Bytes { label: None, values: ["$55", "$46"] }
-Equate { name: "ERRUF", value: -2 }
+Equate { name: "ERRUF", expr: "Q" }
 Bytes { label: Some("ERR"), values: ["$20", "$45", "$52", "$52", "$4F", "$52"] }
 Bytes { label: None, values: ["0"] }
 Bytes { label: Some("INTXT"), values: ["$20", "$49", "$4E", "$20"] }
@@ -343,7 +477,7 @@ Bytes { label: None, values: ["0"] }
 Bytes { label: Some("BRKTXT"), values: ["$0D", "$0A"] }
 Bytes { label: None, values: ["$42", "$52", "$45", "$41", "$4B"] }
 Bytes { label: None, values: ["0"] }
-Equate { name: "FORSIZ", value: 18 }
+Equate { name: "FORSIZ", expr: "2*ADDPRC+16" }
 Instr { label: Some("FNDFOR"), mnemonic: "TSX", operand: None }
 Instr { label: None, mnemonic: "INX", operand: None }
 Instr { label: None, mnemonic: "INX", operand: None }
@@ -601,8 +735,8 @@ Instr { label: None, mnemonic: "DEX", operand: None }
 Instr { label: None, mnemonic: "BNE", operand: Some("LOPBHT") }
 Label("NOCHR")
 Instr { label: None, mnemonic: "LDA", operand: Some("#0") }
-Instr { label: None, mnemonic: "LDX", operand: Some("#<<BUF-1>") }
-Instr { label: None, mnemonic: "LDY", operand: Some("#><BUF-1>") }
+Instr { label: None, mnemonic: "LDX", operand: Some("#<BUF-1") }
+Instr { label: None, mnemonic: "LDY", operand: Some("#>BUF-1") }
 Instr { label: None, mnemonic: "RTS", operand: None }
 Label("INCHR")
 Instr { label: None, mnemonic: "JSR", operand: Some("CQINCH") }
@@ -615,8 +749,8 @@ Instr { label: None, mnemonic: "EOR", operand: Some("#$FF") }
 Instr { label: None, mnemonic: "STA", operand: Some("CNTWFL") }
 Instr { label: None, mnemonic: "PLA", operand: None }
 Instr { label: Some("INCRTS"), mnemonic: "RTS", operand: None }
-Equate { name: "BUFOFS", value: 0 }
-Equate { name: "BUFOFS", value: 512 }
+Equate { name: "BUFOFS", expr: "0" }
+Equate { name: "BUFOFS", expr: "<BUF/256>*256" }
 Instr { label: Some("CRUNCH"), mnemonic: "LDX", operand: Some("TXTPTR") }
 Instr { label: None, mnemonic: "LDY", operand: Some("#4") }
 Instr { label: None, mnemonic: "STY", operand: Some("DORES") }
@@ -773,6 +907,7 @@ Instr { label: None, mnemonic: "LDA", operand: Some("TXTTAB+1") }
 Instr { label: None, mnemonic: "ADC", operand: Some("#255") }
 Instr { label: None, mnemonic: "STA", operand: Some("TXTPTR+1") }
 Instr { label: None, mnemonic: "RTS", operand: None }
+Instr { label: Some("LIST"), mnemonic: "BCC", operand: Some("GOLST") }
 Instr { label: None, mnemonic: "BEQ", operand: Some("GOLST") }
 Instr { label: None, mnemonic: "CMP", operand: Some("#MINUTK") }
 Instr { label: None, mnemonic: "BNE", operand: Some("STKRTS") }
@@ -867,9 +1002,9 @@ Instr { label: None, mnemonic: "PHA", operand: None }
 Instr { label: None, mnemonic: "LDA", operand: Some("TXTPTR+1") }
 Instr { label: None, mnemonic: "ADC", operand: Some("#0") }
 Instr { label: None, mnemonic: "PHA", operand: None }
-Instr { label: None, mnemonic: "LDA", operand: Some("CURLIN") }
-Instr { label: None, mnemonic: "PHA", operand: None }
 Instr { label: None, mnemonic: "LDA", operand: Some("CURLIN+1") }
+Instr { label: None, mnemonic: "PHA", operand: None }
+Instr { label: None, mnemonic: "LDA", operand: Some("CURLIN") }
 Instr { label: None, mnemonic: "PHA", operand: None }
 Instr { label: None, mnemonic: "LDA", operand: Some("#TOTK") }
 Instr { label: None, mnemonic: "JSR", operand: Some("SYNCHR") }
@@ -895,15 +1030,15 @@ Instr { label: None, mnemonic: "JSR", operand: Some("CHRGET") }
 Instr { label: None, mnemonic: "JSR", operand: Some("FRMNUM") }
 Instr { label: Some("ONEON"), mnemonic: "JSR", operand: Some("SIGN") }
 Instr { label: None, mnemonic: "JSR", operand: Some("PUSHF") }
-Instr { label: None, mnemonic: "LDA", operand: Some("FORPNT") }
-Instr { label: None, mnemonic: "PHA", operand: None }
 Instr { label: None, mnemonic: "LDA", operand: Some("FORPNT+1") }
+Instr { label: None, mnemonic: "PHA", operand: None }
+Instr { label: None, mnemonic: "LDA", operand: Some("FORPNT") }
 Instr { label: None, mnemonic: "PHA", operand: None }
 Label("NXTCON")
 Instr { label: None, mnemonic: "LDA", operand: Some("#FORTK") }
 Instr { label: None, mnemonic: "PHA", operand: None }
 Label("NEWSTT")
-Instr { label: None, mnemonic: "IFN", operand: Some("REALIO,<\n\tJSR\tISCNTC>") }
+Instr { label: None, mnemonic: "JSR", operand: Some("ISCNTC") }
 Instr { label: None, mnemonic: "LDA", operand: Some("TXTPTR") }
 Instr { label: None, mnemonic: "LDY", operand: Some("TXTPTR+1") }
 Instr { label: None, mnemonic: "CPY", operand: Some("#BUFPAG") }
@@ -976,6 +1111,7 @@ Instr { label: None, mnemonic: "RTS", operand: None }
 Instr { label: Some("ISCCAP"), mnemonic: "JSR", operand: Some("INCHR") }
 Instr { label: None, mnemonic: "CMP", operand: Some("#^O203") }
 Instr { label: Some("STOP"), mnemonic: "BCS", operand: Some("STOPC") }
+Instr { label: Some("END"), mnemonic: "CLC", operand: None }
 Instr { label: Some("STOPC"), mnemonic: "BNE", operand: Some("CONTRT") }
 Instr { label: None, mnemonic: "LDA", operand: Some("TXTPTR") }
 Instr { label: None, mnemonic: "LDY", operand: Some("TXTPTR+1") }
@@ -1069,13 +1205,13 @@ Instr { label: None, mnemonic: "JMP", operand: Some("RUNC2") }
 Label("GOSUB")
 Instr { label: None, mnemonic: "LDA", operand: Some("#3") }
 Instr { label: None, mnemonic: "JSR", operand: Some("GETSTK") }
-Instr { label: None, mnemonic: "LDA", operand: Some("TXTPTR") }
-Instr { label: None, mnemonic: "PHA", operand: None }
 Instr { label: None, mnemonic: "LDA", operand: Some("TXTPTR+1") }
 Instr { label: None, mnemonic: "PHA", operand: None }
-Instr { label: None, mnemonic: "LDA", operand: Some("CURLIN") }
+Instr { label: None, mnemonic: "LDA", operand: Some("TXTPTR") }
 Instr { label: None, mnemonic: "PHA", operand: None }
 Instr { label: None, mnemonic: "LDA", operand: Some("CURLIN+1") }
+Instr { label: None, mnemonic: "PHA", operand: None }
+Instr { label: None, mnemonic: "LDA", operand: Some("CURLIN") }
 Instr { label: None, mnemonic: "PHA", operand: None }
 Instr { label: None, mnemonic: "LDA", operand: Some("#GOSUTK") }
 Instr { label: None, mnemonic: "PHA", operand: None }
@@ -1114,21 +1250,20 @@ Instr { label: None, mnemonic: "TXS", operand: None }
 Instr { label: None, mnemonic: "CMP", operand: Some("#GOSUTK") }
 Instr { label: None, mnemonic: "BEQ", operand: Some("RETU1") }
 Instr { label: None, mnemonic: "LDX", operand: Some("#ERRRG") }
-Word { label: None, expr: "^O1000" }
-Word { label: None, expr: "^O054" }
+Bytes { label: None, values: ["<^O054>&^O377"] }
 Label("USERR")
 Instr { label: None, mnemonic: "LDX", operand: Some("#ERRUS") }
 Instr { label: None, mnemonic: "JMP", operand: Some("ERROR") }
 Instr { label: Some("SNERR2"), mnemonic: "JMP", operand: Some("SNERR") }
 Instr { label: Some("RETU1"), mnemonic: "PLA", operand: None }
 Instr { label: None, mnemonic: "PLA", operand: None }
-Instr { label: None, mnemonic: "STA", operand: Some("CURLIN+1") }
-Instr { label: None, mnemonic: "PLA", operand: None }
 Instr { label: None, mnemonic: "STA", operand: Some("CURLIN") }
 Instr { label: None, mnemonic: "PLA", operand: None }
-Instr { label: None, mnemonic: "STA", operand: Some("TXTPTR+1") }
+Instr { label: None, mnemonic: "STA", operand: Some("CURLIN+1") }
 Instr { label: None, mnemonic: "PLA", operand: None }
 Instr { label: None, mnemonic: "STA", operand: Some("TXTPTR") }
+Instr { label: None, mnemonic: "PLA", operand: None }
+Instr { label: None, mnemonic: "STA", operand: Some("TXTPTR+1") }
 Instr { label: Some("DATA"), mnemonic: "JSR", operand: Some("DATAN") }
 Instr { label: Some("ADDON"), mnemonic: "TYA", operand: None }
 Instr { label: None, mnemonic: "CLC", operand: None }
@@ -1139,8 +1274,7 @@ Instr { label: None, mnemonic: "INC", operand: Some("TXTPTR+1") }
 Instr { label: Some("REMRTS"), mnemonic: "RTS", operand: None }
 Label("DATAN")
 Instr { label: None, mnemonic: "LDX", operand: Some("#\":\"") }
-Word { label: None, expr: "^O1000" }
-Word { label: None, expr: "^O054" }
+Bytes { label: None, values: ["<^O054>&^O377"] }
 Label("REMN")
 Instr { label: None, mnemonic: "LDX", operand: Some("#0") }
 Instr { label: None, mnemonic: "STX", operand: Some("CHARAC") }
@@ -1220,6 +1354,7 @@ Instr { label: None, mnemonic: "BCC", operand: Some("NXTLGC") }
 Instr { label: None, mnemonic: "INC", operand: Some("LINNUM+1") }
 Instr { label: Some("NXTLGC"), mnemonic: "JSR", operand: Some("CHRGET") }
 Instr { label: None, mnemonic: "JMP", operand: Some("MORLIN") }
+Instr { label: Some("LET"), mnemonic: "JSR", operand: Some("PTRGET") }
 Instr { label: None, mnemonic: "STA", operand: Some("FORPNT") }
 Instr { label: None, mnemonic: "STY", operand: Some("FORPNT+1") }
 Instr { label: None, mnemonic: "LDA", operand: Some("#EQULTK") }
@@ -1335,7 +1470,7 @@ Instr { label: None, mnemonic: "STA", operand: Some("TRMPOS") }
 Instr { label: None, mnemonic: "EOR", operand: Some("#255") }
 Instr { label: Some("PRTRTS"), mnemonic: "RTS", operand: None }
 Instr { label: Some("COMPRT"), mnemonic: "LDA", operand: Some("TRMPOS") }
-Equate { name: "NCMPOS", value: 14 }
+Equate { name: "NCMPOS", expr: "<<<LINLEN/CLMWID>-1>*CLMWID>" }
 Instr { label: None, mnemonic: "CMP", operand: Some("NCMWID") }
 Instr { label: None, mnemonic: "BCC", operand: Some("MORCOM") }
 Instr { label: None, mnemonic: "JSR", operand: Some("CRDO") }
@@ -1380,12 +1515,12 @@ Instr { label: None, mnemonic: "JSR", operand: Some("CRFIN") }
 Instr { label: None, mnemonic: "JMP", operand: Some("STRPR2") }
 Label("OUTSPC")
 Instr { label: None, mnemonic: "LDA", operand: Some("#\" \"") }
-Word { label: None, expr: "^O1000" }
-Word { label: None, expr: "^O054" }
+Bytes { label: None, values: ["<^O054>&^O377"] }
 Label("OUTQST")
 Instr { label: None, mnemonic: "LDA", operand: Some("#\"?\"") }
 Label("OUTDO")
-Instr { label: None, mnemonic: "IFN", operand: Some("REALIO,<\n\tBIT\tCNTWFL\t\t\n\tBMI\tOUTRTS>") }
+Instr { label: None, mnemonic: "BIT", operand: Some("CNTWFL") }
+Instr { label: None, mnemonic: "BMI", operand: Some("OUTRTS") }
 Instr { label: None, mnemonic: "PHA", operand: None }
 Instr { label: None, mnemonic: "CMP", operand: Some("#32") }
 Instr { label: None, mnemonic: "BCC", operand: Some("TRYOUT") }
@@ -1434,7 +1569,7 @@ Instr { label: None, mnemonic: "LDA", operand: Some("#64") }
 Instr { label: None, mnemonic: "JSR", operand: Some("INPCO1") }
 Instr { label: None, mnemonic: "RTS", operand: None }
 Label("INPUT")
-Instr { label: None, mnemonic: "IFN", operand: Some("REALIO,<\n\tLSR\tCNTWFL>") }
+Instr { label: None, mnemonic: "LSR", operand: Some("CNTWFL") }
 Instr { label: None, mnemonic: "CMP", operand: Some("#34") }
 Instr { label: None, mnemonic: "BNE", operand: Some("NOTQTI") }
 Instr { label: None, mnemonic: "JSR", operand: Some("STRTXT") }
@@ -1456,11 +1591,9 @@ Instr { label: Some("GINLIN"), mnemonic: "JMP", operand: Some("INLIN") }
 Label("READ")
 Instr { label: None, mnemonic: "LDX", operand: Some("DATPTR") }
 Instr { label: None, mnemonic: "LDY", operand: Some("DATPTR+1") }
-Word { label: None, expr: "^O1000" }
-Word { label: None, expr: "^O251" }
+Bytes { label: None, values: ["<^O251>&^O377"] }
 Instr { label: None, mnemonic: "TYA", operand: None }
-Word { label: None, expr: "^O1000" }
-Word { label: None, expr: "^O054" }
+Bytes { label: None, values: ["<^O054>&^O377"] }
 Label("INPCON")
 Instr { label: None, mnemonic: "LDA", operand: Some("#0") }
 Instr { label: Some("INPCO1"), mnemonic: "STA", operand: Some("INPFLG") }
@@ -1484,8 +1617,8 @@ Instr { label: None, mnemonic: "BVC", operand: Some("QDATA") }
 Instr { label: None, mnemonic: "JSR", operand: Some("CZGETL") }
 Instr { label: None, mnemonic: "AND", operand: Some("#127") }
 Instr { label: None, mnemonic: "STA", operand: Some("BUF") }
-Instr { label: None, mnemonic: "LDX", operand: Some("#<<BUF-1>") }
-Instr { label: None, mnemonic: "LDY", operand: Some("#><BUF-1>") }
+Instr { label: None, mnemonic: "LDX", operand: Some("#<BUF-1") }
+Instr { label: None, mnemonic: "LDY", operand: Some("#>BUF-1") }
 Instr { label: None, mnemonic: "BNE", operand: Some("DATBK") }
 Instr { label: Some("QDATA"), mnemonic: "BMI", operand: Some("DATLOP") }
 Instr { label: None, mnemonic: "JSR", operand: Some("OUTQST") }
@@ -1638,8 +1771,7 @@ Instr { label: None, mnemonic: "JSR", operand: Some("CHRGET") }
 Instr { label: None, mnemonic: "JSR", operand: Some("GETFOR") }
 Instr { label: Some("FRMNUM"), mnemonic: "JSR", operand: Some("FRMEVL") }
 Instr { label: Some("CHKNUM"), mnemonic: "CLC", operand: None }
-Word { label: None, expr: "^O1000" }
-Word { label: None, expr: "^O044" }
+Bytes { label: None, values: ["<^O044>&^O377"] }
 Instr { label: Some("CHKSTR"), mnemonic: "SEC", operand: None }
 Instr { label: Some("CHKVAL"), mnemonic: "BIT", operand: Some("VALTYP") }
 Instr { label: None, mnemonic: "BMI", operand: Some("DOCSTR") }
@@ -1654,8 +1786,7 @@ Instr { label: None, mnemonic: "BNE", operand: Some("FRMEV1") }
 Instr { label: None, mnemonic: "DEC", operand: Some("TXTPTR+1") }
 Instr { label: Some("FRMEV1"), mnemonic: "DEC", operand: Some("TXTPTR") }
 Instr { label: None, mnemonic: "LDX", operand: Some("#0") }
-Word { label: None, expr: "^O1000" }
-Word { label: None, expr: "^O044" }
+Bytes { label: None, values: ["<^O044>&^O377"] }
 Instr { label: Some("LPOPER"), mnemonic: "PHA", operand: None }
 Instr { label: None, mnemonic: "TXA", operand: None }
 Instr { label: None, mnemonic: "PHA", operand: None }
@@ -1747,7 +1878,7 @@ Instr { label: None, mnemonic: "LDA", operand: Some("FACHO") }
 Instr { label: None, mnemonic: "PHA", operand: None }
 Instr { label: None, mnemonic: "LDA", operand: Some("FACEXP") }
 Instr { label: None, mnemonic: "PHA", operand: None }
-Bytes { label: None, values: ["JMPD\tINDEX1"] }
+Instr { label: None, mnemonic: "JMP", operand: Some("(INDEX1)") }
 Label("QOP")
 Instr { label: None, mnemonic: "LDY", operand: Some("#255") }
 Instr { label: None, mnemonic: "PLA", operand: None }
@@ -1825,12 +1956,10 @@ Instr { label: Some("PARCHK"), mnemonic: "JSR", operand: Some("CHKOPN") }
 Instr { label: None, mnemonic: "JSR", operand: Some("FRMEVL") }
 Label("CHKCLS")
 Instr { label: None, mnemonic: "LDA", operand: Some("#41") }
-Word { label: None, expr: "^O1000" }
-Word { label: None, expr: "^O054" }
+Bytes { label: None, values: ["<^O054>&^O377"] }
 Label("CHKOPN")
 Instr { label: None, mnemonic: "LDA", operand: Some("#40") }
-Word { label: None, expr: "^O1000" }
-Word { label: None, expr: "^O054" }
+Bytes { label: None, values: ["<^O054>&^O377"] }
 Label("CHKCOM")
 Instr { label: None, mnemonic: "LDA", operand: Some("#44") }
 Label("SYNCHR")
@@ -1881,9 +2010,9 @@ Instr { label: None, mnemonic: "JSR", operand: Some("CHKCOM") }
 Instr { label: None, mnemonic: "JSR", operand: Some("CHKSTR") }
 Instr { label: None, mnemonic: "PLA", operand: None }
 Instr { label: None, mnemonic: "TAX", operand: None }
-Instr { label: None, mnemonic: "LDA", operand: Some("FACMO") }
-Instr { label: None, mnemonic: "PHA", operand: None }
 Instr { label: None, mnemonic: "LDA", operand: Some("FACMO+1") }
+Instr { label: None, mnemonic: "PHA", operand: None }
+Instr { label: None, mnemonic: "LDA", operand: Some("FACMO") }
 Instr { label: None, mnemonic: "PHA", operand: None }
 Instr { label: None, mnemonic: "TXA", operand: None }
 Instr { label: None, mnemonic: "PHA", operand: None }
@@ -1904,8 +2033,7 @@ Instr { label: None, mnemonic: "JSR", operand: Some("JMPER") }
 Instr { label: None, mnemonic: "JMP", operand: Some("CHKNUM") }
 Label("OROP")
 Instr { label: None, mnemonic: "LDY", operand: Some("#255") }
-Word { label: None, expr: "^O1000" }
-Word { label: None, expr: "^O054" }
+Bytes { label: None, values: ["<^O054>&^O377"] }
 Label("ANDOP")
 Instr { label: None, mnemonic: "LDY", operand: Some("#0") }
 Instr { label: None, mnemonic: "STY", operand: Some("COUNT") }
@@ -2144,7 +2272,7 @@ Label("JSRGM")
 Instr { label: None, mnemonic: "STA", operand: Some("ARYPNT") }
 Instr { label: None, mnemonic: "STY", operand: Some("ARYPNT+1") }
 Instr { label: None, mnemonic: "RTS", operand: None }
-Label("N32768")
+Bytes { label: Some("N32768"), values: ["144", "128", "0", "0"] }
 Instr { label: Some("INTIDX"), mnemonic: "JSR", operand: Some("CHRGET") }
 Instr { label: None, mnemonic: "JSR", operand: Some("FRMEVL") }
 Instr { label: Some("POSINT"), mnemonic: "JSR", operand: Some("CHKNUM") }
@@ -2166,15 +2294,15 @@ Instr { label: None, mnemonic: "PHA", operand: None }
 Instr { label: None, mnemonic: "LDY", operand: Some("#0") }
 Instr { label: Some("INDLOP"), mnemonic: "TYA", operand: None }
 Instr { label: None, mnemonic: "PHA", operand: None }
-Instr { label: None, mnemonic: "LDA", operand: Some("VARNAM") }
-Instr { label: None, mnemonic: "PHA", operand: None }
 Instr { label: None, mnemonic: "LDA", operand: Some("VARNAM+1") }
+Instr { label: None, mnemonic: "PHA", operand: None }
+Instr { label: None, mnemonic: "LDA", operand: Some("VARNAM") }
 Instr { label: None, mnemonic: "PHA", operand: None }
 Instr { label: None, mnemonic: "JSR", operand: Some("INTIDX") }
 Instr { label: None, mnemonic: "PLA", operand: None }
-Instr { label: None, mnemonic: "STA", operand: Some("VARNAM+1") }
-Instr { label: None, mnemonic: "PLA", operand: None }
 Instr { label: None, mnemonic: "STA", operand: Some("VARNAM") }
+Instr { label: None, mnemonic: "PLA", operand: None }
+Instr { label: None, mnemonic: "STA", operand: Some("VARNAM+1") }
 Instr { label: None, mnemonic: "PLA", operand: None }
 Instr { label: None, mnemonic: "TAY", operand: None }
 Instr { label: None, mnemonic: "TSX", operand: None }
@@ -2226,8 +2354,7 @@ Instr { label: None, mnemonic: "ADC", operand: Some("LOWTR+1") }
 Instr { label: None, mnemonic: "BCC", operand: Some("LOPFDA") }
 Label("BSERR")
 Instr { label: None, mnemonic: "LDX", operand: Some("#ERRBS") }
-Word { label: None, expr: "^O1000" }
-Word { label: None, expr: "^O054" }
+Bytes { label: None, values: ["<^O054>&^O377"] }
 Label("FCERR")
 Instr { label: None, mnemonic: "LDX", operand: Some("#ERRFC") }
 Instr { label: Some("ERRGO3"), mnemonic: "JMP", operand: Some("ERROR") }
@@ -2433,8 +2560,7 @@ Instr { label: Some("ERRDIR"), mnemonic: "LDX", operand: Some("CURLIN+1") }
 Instr { label: None, mnemonic: "INX", operand: None }
 Instr { label: None, mnemonic: "BNE", operand: Some("DIMRTS") }
 Instr { label: None, mnemonic: "LDX", operand: Some("#ERRID") }
-Word { label: None, expr: "^O1000" }
-Word { label: None, expr: "^O054" }
+Bytes { label: None, values: ["<^O054>&^O377"] }
 Label("ERRGUF")
 Instr { label: None, mnemonic: "LDX", operand: Some("#ERRUF") }
 Instr { label: Some("ERRGO1"), mnemonic: "JMP", operand: Some("ERROR") }
@@ -2449,13 +2575,13 @@ Instr { label: None, mnemonic: "JSR", operand: Some("CHKCLS") }
 Instr { label: None, mnemonic: "LDA", operand: Some("#EQULTK") }
 Instr { label: None, mnemonic: "JSR", operand: Some("SYNCHR") }
 Instr { label: None, mnemonic: "PHA", operand: None }
-Instr { label: None, mnemonic: "LDA", operand: Some("VARPNT") }
-Instr { label: None, mnemonic: "PHA", operand: None }
 Instr { label: None, mnemonic: "LDA", operand: Some("VARPNT+1") }
 Instr { label: None, mnemonic: "PHA", operand: None }
-Instr { label: None, mnemonic: "LDA", operand: Some("TXTPTR") }
+Instr { label: None, mnemonic: "LDA", operand: Some("VARPNT") }
 Instr { label: None, mnemonic: "PHA", operand: None }
 Instr { label: None, mnemonic: "LDA", operand: Some("TXTPTR+1") }
+Instr { label: None, mnemonic: "PHA", operand: None }
+Instr { label: None, mnemonic: "LDA", operand: Some("TXTPTR") }
 Instr { label: None, mnemonic: "PHA", operand: None }
 Instr { label: None, mnemonic: "JSR", operand: Some("DATA") }
 Instr { label: None, mnemonic: "JMP", operand: Some("DEFFIN") }
@@ -2469,16 +2595,16 @@ Instr { label: None, mnemonic: "STA", operand: Some("DEFPNT") }
 Instr { label: None, mnemonic: "STY", operand: Some("DEFPNT+1") }
 Instr { label: None, mnemonic: "JMP", operand: Some("CHKNUM") }
 Instr { label: Some("FNDOER"), mnemonic: "JSR", operand: Some("GETFNM") }
-Instr { label: None, mnemonic: "LDA", operand: Some("DEFPNT") }
-Instr { label: None, mnemonic: "PHA", operand: None }
 Instr { label: None, mnemonic: "LDA", operand: Some("DEFPNT+1") }
+Instr { label: None, mnemonic: "PHA", operand: None }
+Instr { label: None, mnemonic: "LDA", operand: Some("DEFPNT") }
 Instr { label: None, mnemonic: "PHA", operand: None }
 Instr { label: None, mnemonic: "JSR", operand: Some("PARCHK") }
 Instr { label: None, mnemonic: "JSR", operand: Some("CHKNUM") }
 Instr { label: None, mnemonic: "PLA", operand: None }
-Instr { label: None, mnemonic: "STA", operand: Some("DEFPNT+1") }
-Instr { label: None, mnemonic: "PLA", operand: None }
 Instr { label: None, mnemonic: "STA", operand: Some("DEFPNT") }
+Instr { label: None, mnemonic: "PLA", operand: None }
+Instr { label: None, mnemonic: "STA", operand: Some("DEFPNT+1") }
 Instr { label: None, mnemonic: "LDY", operand: Some("#2") }
 Instr { label: None, mnemonic: "LDA", operand: Some("(DEFPNT),Y") }
 Instr { label: None, mnemonic: "STA", operand: Some("VARPNT") }
@@ -2495,32 +2621,32 @@ Instr { label: None, mnemonic: "DEY", operand: None }
 Instr { label: None, mnemonic: "BPL", operand: Some("DEFSTF") }
 Instr { label: None, mnemonic: "LDY", operand: Some("VARPNT+1") }
 Instr { label: None, mnemonic: "JSR", operand: Some("MOVMF") }
-Instr { label: None, mnemonic: "LDA", operand: Some("TXTPTR") }
-Instr { label: None, mnemonic: "PHA", operand: None }
 Instr { label: None, mnemonic: "LDA", operand: Some("TXTPTR+1") }
+Instr { label: None, mnemonic: "PHA", operand: None }
+Instr { label: None, mnemonic: "LDA", operand: Some("TXTPTR") }
 Instr { label: None, mnemonic: "PHA", operand: None }
 Instr { label: None, mnemonic: "LDA", operand: Some("(DEFPNT),Y") }
 Instr { label: None, mnemonic: "STA", operand: Some("TXTPTR") }
 Instr { label: None, mnemonic: "INY", operand: None }
 Instr { label: None, mnemonic: "LDA", operand: Some("(DEFPNT),Y") }
 Instr { label: None, mnemonic: "STA", operand: Some("TXTPTR+1") }
-Instr { label: None, mnemonic: "LDA", operand: Some("VARPNT") }
-Instr { label: None, mnemonic: "PHA", operand: None }
 Instr { label: None, mnemonic: "LDA", operand: Some("VARPNT+1") }
+Instr { label: None, mnemonic: "PHA", operand: None }
+Instr { label: None, mnemonic: "LDA", operand: Some("VARPNT") }
 Instr { label: None, mnemonic: "PHA", operand: None }
 Instr { label: None, mnemonic: "JSR", operand: Some("FRMNUM") }
 Instr { label: None, mnemonic: "PLA", operand: None }
-Instr { label: None, mnemonic: "STA", operand: Some("DEFPNT+1") }
-Instr { label: None, mnemonic: "PLA", operand: None }
 Instr { label: None, mnemonic: "STA", operand: Some("DEFPNT") }
+Instr { label: None, mnemonic: "PLA", operand: None }
+Instr { label: None, mnemonic: "STA", operand: Some("DEFPNT+1") }
 Instr { label: None, mnemonic: "JSR", operand: Some("CHRGOT") }
 Instr { label: None, mnemonic: "BEQ", operand: Some("__LJ7") }
 Instr { label: None, mnemonic: "JMP", operand: Some("SNERR") }
 Label("__LJ7")
 Instr { label: None, mnemonic: "PLA", operand: None }
-Instr { label: None, mnemonic: "STA", operand: Some("TXTPTR+1") }
-Instr { label: None, mnemonic: "PLA", operand: None }
 Instr { label: None, mnemonic: "STA", operand: Some("TXTPTR") }
+Instr { label: None, mnemonic: "PLA", operand: None }
+Instr { label: None, mnemonic: "STA", operand: Some("TXTPTR+1") }
 Label("DEFFIN")
 Instr { label: None, mnemonic: "LDY", operand: Some("#0") }
 Instr { label: None, mnemonic: "PLA", operand: None }
@@ -2978,9 +3104,9 @@ Instr { label: None, mnemonic: "PLA", operand: None }
 Instr { label: None, mnemonic: "PLA", operand: None }
 Instr { label: None, mnemonic: "TAX", operand: None }
 Instr { label: None, mnemonic: "PLA", operand: None }
-Instr { label: None, mnemonic: "STA", operand: Some("DSCPNT+1") }
-Instr { label: None, mnemonic: "PLA", operand: None }
 Instr { label: None, mnemonic: "STA", operand: Some("DSCPNT") }
+Instr { label: None, mnemonic: "PLA", operand: None }
+Instr { label: None, mnemonic: "STA", operand: Some("DSCPNT+1") }
 Instr { label: None, mnemonic: "LDA", operand: Some("JMPER+1") }
 Instr { label: None, mnemonic: "PHA", operand: None }
 Instr { label: None, mnemonic: "TYA", operand: None }
@@ -3059,9 +3185,9 @@ Instr { label: None, mnemonic: "STY", operand: Some("POKER") }
 Instr { label: None, mnemonic: "STA", operand: Some("POKER+1") }
 Instr { label: None, mnemonic: "RTS", operand: None }
 Label("PEEK")
-Instr { label: None, mnemonic: "LDA", operand: Some("POKER") }
-Instr { label: None, mnemonic: "PHA", operand: None }
 Instr { label: None, mnemonic: "LDA", operand: Some("POKER+1") }
+Instr { label: None, mnemonic: "PHA", operand: None }
+Instr { label: None, mnemonic: "LDA", operand: Some("POKER") }
 Instr { label: None, mnemonic: "PHA", operand: None }
 Instr { label: None, mnemonic: "JSR", operand: Some("GETADR") }
 Instr { label: None, mnemonic: "LDY", operand: Some("#0") }
@@ -3070,9 +3196,9 @@ Instr { label: None, mnemonic: "LDA", operand: Some("(POKER),Y") }
 Instr { label: None, mnemonic: "TAY", operand: None }
 Label("DOSGFL")
 Instr { label: None, mnemonic: "PLA", operand: None }
-Instr { label: None, mnemonic: "STA", operand: Some("POKER+1") }
-Instr { label: None, mnemonic: "PLA", operand: None }
 Instr { label: None, mnemonic: "STA", operand: Some("POKER") }
+Instr { label: None, mnemonic: "PLA", operand: None }
+Instr { label: None, mnemonic: "STA", operand: Some("POKER+1") }
 Instr { label: None, mnemonic: "JMP", operand: Some("SNGFLT") }
 Instr { label: Some("POKE"), mnemonic: "JSR", operand: Some("GETNUM") }
 Instr { label: None, mnemonic: "TXA", operand: None }
@@ -3093,6 +3219,7 @@ Instr { label: None, mnemonic: "EOR", operand: Some("EORMSK") }
 Instr { label: None, mnemonic: "AND", operand: Some("ANDMSK") }
 Instr { label: None, mnemonic: "BEQ", operand: Some("WAITER") }
 Instr { label: Some("ZERRTS"), mnemonic: "RTS", operand: None }
+Radix(8)
 Label("FADDH")
 Instr { label: None, mnemonic: "LDA", operand: Some("#<FHALF") }
 Instr { label: None, mnemonic: "LDY", operand: Some("#>FHALF") }
@@ -3106,7 +3233,7 @@ Instr { label: None, mnemonic: "STA", operand: Some("ARISGN") }
 Instr { label: None, mnemonic: "LDA", operand: Some("FACEXP") }
 Instr { label: None, mnemonic: "JMP", operand: Some("FADDT") }
 Bytes { label: None, values: [".XCREF"] }
-Equate { name: "ZSTORDO", value: 0 }
+Equate { name: "ZSTORDO", expr: "STORDO" }
 Bytes { label: None, values: [".CREF"] }
 Instr { label: Some("FADD5"), mnemonic: "JSR", operand: Some("SHIFTR") }
 Instr { label: None, mnemonic: "BCC", operand: Some("FADD4") }
@@ -3456,8 +3583,7 @@ Instr { label: None, mnemonic: "ADC", operand: Some("FACEXP") }
 Instr { label: None, mnemonic: "BCC", operand: Some("TRYOFF") }
 Instr { label: None, mnemonic: "BMI", operand: Some("GOOVER") }
 Instr { label: None, mnemonic: "CLC", operand: None }
-Word { label: None, expr: "^O1000" }
-Word { label: None, expr: "^O054" }
+Bytes { label: None, values: ["<^O054>&^O377"] }
 Instr { label: Some("TRYOFF"), mnemonic: "BPL", operand: Some("ZEREMV") }
 Instr { label: None, mnemonic: "ADC", operand: Some("#200") }
 Instr { label: None, mnemonic: "STA", operand: Some("FACEXP") }
@@ -3604,8 +3730,7 @@ Instr { label: None, mnemonic: "STY", operand: Some("FACOV") }
 Instr { label: None, mnemonic: "RTS", operand: None }
 Label("MOV2F")
 Instr { label: None, mnemonic: "LDX", operand: Some("#TEMPF2") }
-Word { label: None, expr: "^O1000" }
-Word { label: None, expr: "^O054" }
+Bytes { label: None, values: ["<^O054>&^O377"] }
 Label("MOV1F")
 Instr { label: None, mnemonic: "LDX", operand: Some("#TEMPF1") }
 Label("MOVML")
@@ -4189,6 +4314,7 @@ Bytes { label: None, values: ["000"] }
 Bytes { label: None, values: ["000"] }
 Bytes { label: None, values: ["000"] }
 Bytes { label: None, values: ["000"] }
+Label("EXP")
 Instr { label: None, mnemonic: "LDA", operand: Some("#<LOGEB2") }
 Instr { label: None, mnemonic: "LDY", operand: Some("#>LOGEB2") }
 Instr { label: None, mnemonic: "JSR", operand: Some("FMULT") }
@@ -4505,6 +4631,7 @@ Bytes { label: None, values: ["000"] }
 Bytes { label: None, values: ["000"] }
 Bytes { label: None, values: ["000"] }
 Bytes { label: None, values: ["000"] }
+Radix(10)
 Instr { label: Some("INITAT"), mnemonic: "INC", operand: Some("CHRGET+7") }
 Instr { label: None, mnemonic: "BNE", operand: Some("CHZGOT") }
 Instr { label: None, mnemonic: "INC", operand: Some("CHRGET+8") }
@@ -4681,7 +4808,7 @@ Instr { label: None, mnemonic: "LDA", operand: Some("#<READY") }
 Instr { label: None, mnemonic: "LDY", operand: Some("#>READY") }
 Instr { label: None, mnemonic: "STA", operand: Some("START+1") }
 Instr { label: None, mnemonic: "STY", operand: Some("START+1+1") }
-Bytes { label: None, values: ["JMPD\tSTART+1"] }
+Instr { label: None, mnemonic: "JMP", operand: Some("(START+1)") }
 Bytes { label: Some("AUTTXT"), values: ["$0D", "$0A"] }
 Bytes { label: None, values: ["12"] }
 Bytes { label: None, values: ["$57", "$52", "$49", "$54", "$54", "$45", "$4E", "$20"] }
@@ -4704,4 +4831,4 @@ Bytes { label: None, values: ["$0D", "$0A"] }
 Bytes { label: None, values: ["0"] }
 Label("LASTWR")
 Res { label: None, count: 100 }
-Equate { name: "START", value: 0 }
+Equate { name: "START", expr: "0" }

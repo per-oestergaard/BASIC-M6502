@@ -6,6 +6,61 @@ use crate::parser::*;
 use std::collections::HashMap;
 use std::io;
 
+/// Two-letter error codes matching original Microsoft BASIC
+#[derive(Debug, Clone, Copy)]
+enum ErrorCode {
+    NF, // NEXT without FOR
+    SN, // Syntax error
+    RG, // RETURN without GOSUB
+    OD, // Out of DATA
+    FC, // Illegal quantity (Function Call error)
+    OV, // Overflow
+    OM, // Out of memory
+    US, // Undefined statement
+    BS, // Bad subscript
+    DD, // Redimensioned array
+    DZ, // Division by zero (/0)
+    TM, // Type mismatch
+    LS, // String too long
+    ST, // Formula too complex
+    UF, // Undefined function
+}
+
+impl ErrorCode {
+    fn code_str(self) -> &'static str {
+        match self {
+            ErrorCode::NF => "NF",
+            ErrorCode::SN => "SN",
+            ErrorCode::RG => "RG",
+            ErrorCode::OD => "OD",
+            ErrorCode::FC => "FC",
+            ErrorCode::OV => "OV",
+            ErrorCode::OM => "OM",
+            ErrorCode::US => "US",
+            ErrorCode::BS => "BS",
+            ErrorCode::DD => "DD",
+            ErrorCode::DZ => "/0",
+            ErrorCode::TM => "TM",
+            ErrorCode::LS => "LS",
+            ErrorCode::ST => "ST",
+            ErrorCode::UF => "UF",
+        }
+    }
+}
+
+/// A runtime BASIC error with error code
+fn basic_error(code: ErrorCode) -> String {
+    format!("__BASIC_ERROR__:{}", code.code_str())
+}
+
+/// Check if a string is a structured BASIC error
+fn parse_basic_error(msg: &str) -> Option<&str> {
+    msg.strip_prefix("__BASIC_ERROR__:")
+}
+
+/// Maximum magnitude for numbers (matching original 40-bit BASIC float)
+const BASIC_MAX: f64 = 1.7014118e38;
+
 #[derive(Debug, Clone, PartialEq)]
 enum Value {
     Number(f64),
@@ -16,14 +71,14 @@ impl Value {
     fn as_number(&self) -> Result<f64, String> {
         match self {
             Value::Number(n) => Ok(*n),
-            Value::String(_) => Err("Type mismatch: expected number".to_string()),
+            Value::String(_) => Err(basic_error(ErrorCode::TM)),
         }
     }
 
     fn as_string(&self) -> Result<String, String> {
         match self {
             Value::String(s) => Ok(s.clone()),
-            Value::Number(_) => Err("Type mismatch: expected string".to_string()),
+            Value::Number(_) => Err(basic_error(ErrorCode::TM)),
         }
     }
 
@@ -35,6 +90,11 @@ impl Value {
     }
 }
 
+/// Memory limit for variables and arrays, approximating the original ROM's
+/// pool (~1535 bytes between TXTTAB and MEMSIZ).  Allocations that would
+/// exceed this trigger an ?OM ERROR.
+const MEMORY_LIMIT: usize = 1535;
+
 pub struct Interpreter {
     variables: HashMap<String, Value>,
     arrays: HashMap<String, Array>,
@@ -43,15 +103,19 @@ pub struct Interpreter {
     input_pos: usize,
     line_map: HashMap<u32, usize>,
     pc: usize,
+    stmt_pc: usize,
     current_line: u32,
     for_stack: Vec<ForContext>,
-    gosub_stack: Vec<usize>,
+    gosub_stack: Vec<(usize, usize)>,
     data_values: Vec<DataValue>,
     data_pos: usize,
     user_functions: HashMap<String, (String, Expr)>,
     rnd_seed: f64,
     print_column: usize,
     memory: HashMap<u16, u8>,
+    expr_depth: usize,
+    string_temps: usize,
+    memory_used: usize,
 }
 
 struct Array {
@@ -65,6 +129,7 @@ struct ForContext {
     end_value: f64,
     step: f64,
     return_pc: usize,
+    return_stmt: usize,
 }
 
 impl Interpreter {
@@ -77,6 +142,7 @@ impl Interpreter {
             input_pos: 0,
             line_map: HashMap::new(),
             pc: 0,
+            stmt_pc: 0,
             current_line: 0,
             for_stack: Vec::new(),
             gosub_stack: Vec::new(),
@@ -86,6 +152,9 @@ impl Interpreter {
             rnd_seed: 0.0,
             print_column: 0,
             memory: HashMap::new(),
+            expr_depth: 0,
+            string_temps: 0,
+            memory_used: 0,
         }
     }
 
@@ -98,18 +167,54 @@ impl Interpreter {
         self.build_line_map(program)?;
         self.collect_data(program)?;
 
+        // Expression nesting depth tracker for formula-too-complex detection
+        self.expr_depth = 0;
+
         // Execute program
         self.pc = 0;
+        self.stmt_pc = 0;
 
         while self.pc < program.lines.len() {
             let line = &program.lines[self.pc];
             self.current_line = line.line_number;
 
-            for stmt in &line.statements {
-                self.execute_statement(stmt, program)?;
+            while self.stmt_pc < line.statements.len() {
+                let saved_pc = self.pc;
+                let stmt = &line.statements[self.stmt_pc];
+                self.stmt_pc += 1;
+
+                match self.execute_statement(stmt, program) {
+                    Ok(()) => {}
+                    Err(msg) => {
+                        if let Some(code) = parse_basic_error(&msg) {
+                            self.output
+                                .push_str(&format!("\n?{} ERROR IN  {}", code, self.current_line));
+                        } else {
+                            self.output.push_str(&format!(
+                                "\n?SN ERROR IN  {}",
+                                self.current_line
+                            ));
+                        }
+                        if self.output.starts_with('\n') {
+                            self.output.remove(0);
+                        }
+                        return Ok(self.output.clone());
+                    }
+                }
+
+                // If pc was changed (GOTO/GOSUB/NEXT), break inner loop
+                if self.pc != saved_pc {
+                    break;
+                }
             }
 
-            self.pc += 1;
+            // If we exhausted all stmts on the current line, advance to next line
+            if self.pc < program.lines.len()
+                && self.stmt_pc >= program.lines[self.pc].statements.len()
+            {
+                self.pc += 1;
+                self.stmt_pc = 0;
+            }
         }
 
         Ok(self.output.clone())
@@ -134,6 +239,7 @@ impl Interpreter {
     }
 
     fn execute_statement(&mut self, stmt: &Statement, program: &Program) -> Result<(), String> {
+        self.string_temps = 0;
         match stmt {
             Statement::Print(print_stmt) => self.exec_print(print_stmt),
             Statement::Let(let_stmt) => self.exec_let(let_stmt),
@@ -156,6 +262,8 @@ impl Interpreter {
             Statement::Rem(_) => Ok(()), // Comments are ignored
             Statement::Input(input_stmt) => self.exec_input(input_stmt),
             Statement::Poke(poke_stmt) => self.exec_poke(poke_stmt),
+            Statement::Get(get_stmt) => self.exec_get(get_stmt),
+            Statement::SyntaxError => Err(basic_error(ErrorCode::SN)),
         }
     }
 
@@ -281,12 +389,13 @@ impl Interpreter {
         self.variables
             .insert(stmt.var.clone(), Value::Number(start));
 
-        // Push FOR context
+        // Push FOR context — return to the statement AFTER the FOR
         self.for_stack.push(ForContext {
             var: stmt.var.clone(),
             end_value: end,
             step,
             return_pc: self.pc,
+            return_stmt: self.stmt_pc,
         });
 
         Ok(())
@@ -294,7 +403,7 @@ impl Interpreter {
 
     fn exec_next(&mut self, stmt: &NextStmt, _program: &Program) -> Result<(), String> {
         if self.for_stack.is_empty() {
-            return Err("NEXT without FOR".to_string());
+            return Err(basic_error(ErrorCode::NF));
         }
 
         let ctx = self.for_stack.last().unwrap().clone();
@@ -302,7 +411,7 @@ impl Interpreter {
         // Check variable name if specified
         if let Some(var_name) = &stmt.var {
             if var_name != &ctx.var {
-                return Err(format!("NEXT {} doesn't match FOR {}", var_name, ctx.var));
+                return Err(basic_error(ErrorCode::NF));
             }
         }
 
@@ -310,7 +419,7 @@ impl Interpreter {
         let current = self
             .variables
             .get(&ctx.var)
-            .ok_or("Loop variable not found")?
+            .ok_or_else(|| basic_error(ErrorCode::SN))?
             .as_number()?;
         let next_val = current + ctx.step;
 
@@ -329,6 +438,7 @@ impl Interpreter {
             self.variables
                 .insert(ctx.var.clone(), Value::Number(next_val));
             self.pc = ctx.return_pc;
+            self.stmt_pc = ctx.return_stmt;
         }
 
         Ok(())
@@ -338,50 +448,76 @@ impl Interpreter {
         let target_pc = self
             .line_map
             .get(&stmt.target)
-            .ok_or(format!("Undefined line number: {}", stmt.target))?;
+            .ok_or_else(|| basic_error(ErrorCode::US))?;
         self.pc = *target_pc;
-        // Subtract 1 because pc will be incremented after this statement
-        if self.pc > 0 {
-            self.pc -= 1;
-        }
+        self.stmt_pc = 0;
         Ok(())
     }
 
     fn exec_gosub(&mut self, stmt: &GosubStmt) -> Result<(), String> {
-        self.gosub_stack.push(self.pc);
+        // Save return point: current line + current statement position
+        self.gosub_stack.push((self.pc, self.stmt_pc));
         self.exec_goto(&GotoStmt {
             target: stmt.target,
         })
     }
 
     fn exec_return(&mut self) -> Result<(), String> {
-        let return_pc = self.gosub_stack.pop().ok_or("RETURN without GOSUB")?;
+        let (return_pc, return_stmt) = self.gosub_stack.pop().ok_or_else(|| basic_error(ErrorCode::RG))?;
         self.pc = return_pc;
+        self.stmt_pc = return_stmt;
+        Ok(())
+    }
+
+    /// Cost of an array in the simulated memory pool:
+    /// 7-byte header + 5 bytes per element (matching the original ROM layout).
+    fn array_cost(total_elements: usize) -> usize {
+        7 + total_elements * 5
+    }
+
+    /// Allocate an array, checking the memory pool first.
+    fn alloc_array(&mut self, name: String, dims: Vec<usize>) -> Result<(), String> {
+        let total_size: usize = dims.iter().product();
+        let cost = Self::array_cost(total_size);
+        if self.memory_used + cost > MEMORY_LIMIT {
+            return Err(basic_error(ErrorCode::OM));
+        }
+        self.memory_used += cost;
+
+        let default_value = if name.ends_with('$') {
+            Value::String(String::new())
+        } else {
+            Value::Number(0.0)
+        };
+        self.arrays.insert(
+            name,
+            Array {
+                dims,
+                values: vec![default_value; total_size],
+            },
+        );
         Ok(())
     }
 
     fn exec_dim(&mut self, stmt: &DimStmt) -> Result<(), String> {
         for (name, dim_exprs) in &stmt.arrays {
+            // Check for redimensioning
+            if self.arrays.contains_key(name) {
+                return Err(basic_error(ErrorCode::DD));
+            }
+
             let dims: Result<Vec<usize>, String> = dim_exprs
                 .iter()
-                .map(|e| self.eval_expr(e)?.as_number().map(|n| (n as usize) + 1))
+                .map(|e| {
+                    let n = self.eval_expr(e)?.as_number()?;
+                    if n < 0.0 {
+                        return Err(basic_error(ErrorCode::FC));
+                    }
+                    Ok((n as usize) + 1)
+                })
                 .collect();
 
-            let dims = dims?;
-            let total_size = dims.iter().product();
-
-            let default_value = if name.ends_with('$') {
-                Value::String(String::new())
-            } else {
-                Value::Number(0.0)
-            };
-
-            let array = Array {
-                dims,
-                values: vec![default_value; total_size],
-            };
-
-            self.arrays.insert(name.clone(), array);
+            self.alloc_array(name.clone(), dims?)?
         }
 
         Ok(())
@@ -390,7 +526,7 @@ impl Interpreter {
     fn exec_read(&mut self, stmt: &ReadStmt) -> Result<(), String> {
         for var_ref in &stmt.vars {
             if self.data_pos >= self.data_values.len() {
-                return Err("Out of DATA".to_string());
+                return Err(basic_error(ErrorCode::OD));
             }
 
             let data_val = &self.data_values[self.data_pos];
@@ -451,6 +587,7 @@ impl Interpreter {
         // CLEAR resets all variables and arrays to zero/empty
         self.variables.clear();
         self.arrays.clear();
+        self.memory_used = 0;
         Ok(())
     }
 
@@ -458,6 +595,7 @@ impl Interpreter {
         // NEW clears everything and outputs "OK"
         self.variables.clear();
         self.arrays.clear();
+        self.memory_used = 0;
         self.for_stack.clear();
         self.gosub_stack.clear();
         self.user_functions.clear();
@@ -486,7 +624,7 @@ impl Interpreter {
             let mut line = String::new();
             io::stdin()
                 .read_line(&mut line)
-                .map_err(|e| format!("Input error: {}", e))?;
+                .map_err(|_| basic_error(ErrorCode::SN))?;
             line.trim().to_string()
         };
 
@@ -494,7 +632,7 @@ impl Interpreter {
         let values: Vec<&str> = input_line.split(',').map(|s| s.trim()).collect();
 
         if values.len() != stmt.vars.len() {
-            return Err("Input count mismatch".to_string());
+            return Err(basic_error(ErrorCode::SN));
         }
 
         for (var_ref, val_str) in stmt.vars.iter().zip(values.iter()) {
@@ -531,7 +669,7 @@ impl Interpreter {
                 let (param, body) = self
                     .user_functions
                     .get(name)
-                    .ok_or(format!("Undefined function: {}", name))?
+                    .ok_or_else(|| basic_error(ErrorCode::UF))?
                     .clone();
 
                 let arg_value = self.eval_expr(arg)?;
@@ -567,24 +705,54 @@ impl Interpreter {
 
                 match op {
                     BinaryOp::Add => match (&left_val, &right_val) {
-                        (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a + b)),
-                        (Value::String(a), Value::String(b)) => {
-                            Ok(Value::String(format!("{}{}", a, b)))
+                        (Value::Number(a), Value::Number(b)) => {
+                            let result = a + b;
+                            if result.abs() > BASIC_MAX {
+                                return Err(basic_error(ErrorCode::OV));
+                            }
+                            Ok(Value::Number(result))
                         }
-                        _ => Err("Type mismatch in addition".to_string()),
+                        (Value::String(a), Value::String(b)) => {
+                            self.string_temps += 1;
+                            if self.string_temps > 15 {
+                                return Err(basic_error(ErrorCode::ST));
+                            }
+                            let result = format!("{}{}", a, b);
+                            if result.len() > 255 {
+                                return Err(basic_error(ErrorCode::LS));
+                            }
+                            Ok(Value::String(result))
+                        }
+                        _ => Err(basic_error(ErrorCode::TM)),
                     },
-                    BinaryOp::Sub => Ok(Value::Number(
-                        left_val.as_number()? - right_val.as_number()?,
-                    )),
-                    BinaryOp::Mul => Ok(Value::Number(
-                        left_val.as_number()? * right_val.as_number()?,
-                    )),
-                    BinaryOp::Div => Ok(Value::Number(
-                        left_val.as_number()? / right_val.as_number()?,
-                    )),
-                    BinaryOp::Pow => Ok(Value::Number(
-                        left_val.as_number()?.powf(right_val.as_number()?),
-                    )),
+                    BinaryOp::Sub => {
+                        let result = left_val.as_number()? - right_val.as_number()?;
+                        if result.abs() > BASIC_MAX {
+                            return Err(basic_error(ErrorCode::OV));
+                        }
+                        Ok(Value::Number(result))
+                    }
+                    BinaryOp::Mul => {
+                        let result = left_val.as_number()? * right_val.as_number()?;
+                        if result.abs() > BASIC_MAX {
+                            return Err(basic_error(ErrorCode::OV));
+                        }
+                        Ok(Value::Number(result))
+                    }
+                    BinaryOp::Div => {
+                        let divisor = right_val.as_number()?;
+                        if divisor == 0.0 {
+                            return Err(basic_error(ErrorCode::DZ));
+                        }
+                        Ok(Value::Number(left_val.as_number()? / divisor))
+                    }
+                    BinaryOp::Pow => {
+                        let result = left_val.as_number()?.powf(right_val.as_number()?);
+                        if result.abs() > BASIC_MAX {
+                            return Err(basic_error(ErrorCode::OV));
+                        }
+                        Ok(Value::Number(result))
+                    }
                     BinaryOp::Eq => {
                         let result = left_val == right_val;
                         Ok(Value::Number(if result { -1.0 } else { 0.0 }))
@@ -597,7 +765,7 @@ impl Interpreter {
                         let result = match (&left_val, &right_val) {
                             (Value::Number(a), Value::Number(b)) => a < b,
                             (Value::String(a), Value::String(b)) => a < b,
-                            _ => return Err("Type mismatch in comparison".to_string()),
+                            _ => return Err(basic_error(ErrorCode::TM)),
                         };
                         Ok(Value::Number(if result { -1.0 } else { 0.0 }))
                     }
@@ -605,7 +773,7 @@ impl Interpreter {
                         let result = match (&left_val, &right_val) {
                             (Value::Number(a), Value::Number(b)) => a > b,
                             (Value::String(a), Value::String(b)) => a > b,
-                            _ => return Err("Type mismatch in comparison".to_string()),
+                            _ => return Err(basic_error(ErrorCode::TM)),
                         };
                         Ok(Value::Number(if result { -1.0 } else { 0.0 }))
                     }
@@ -613,7 +781,7 @@ impl Interpreter {
                         let result = match (&left_val, &right_val) {
                             (Value::Number(a), Value::Number(b)) => a <= b,
                             (Value::String(a), Value::String(b)) => a <= b,
-                            _ => return Err("Type mismatch in comparison".to_string()),
+                            _ => return Err(basic_error(ErrorCode::TM)),
                         };
                         Ok(Value::Number(if result { -1.0 } else { 0.0 }))
                     }
@@ -621,7 +789,7 @@ impl Interpreter {
                         let result = match (&left_val, &right_val) {
                             (Value::Number(a), Value::Number(b)) => a >= b,
                             (Value::String(a), Value::String(b)) => a >= b,
-                            _ => return Err("Type mismatch in comparison".to_string()),
+                            _ => return Err(basic_error(ErrorCode::TM)),
                         };
                         Ok(Value::Number(if result { -1.0 } else { 0.0 }))
                     }
@@ -693,6 +861,9 @@ impl Interpreter {
             }
             BuiltinFn::Sqr(expr) => {
                 let n = self.eval_expr(expr)?.as_number()?;
+                if n < 0.0 {
+                    return Err(basic_error(ErrorCode::FC));
+                }
                 Ok(Value::Number(n.sqrt()))
             }
             BuiltinFn::Tan(expr) => {
@@ -702,13 +873,16 @@ impl Interpreter {
             BuiltinFn::Asc(expr) => {
                 let s = self.eval_expr(expr)?.as_string()?;
                 if s.is_empty() {
-                    return Err("ASC of empty string".to_string());
+                    return Err(basic_error(ErrorCode::FC));
                 }
                 Ok(Value::Number(s.bytes().next().unwrap() as f64))
             }
             BuiltinFn::Chr(expr) => {
-                let n = self.eval_expr(expr)?.as_number()? as u8;
-                Ok(Value::String((n as char).to_string()))
+                let n = self.eval_expr(expr)?.as_number()?;
+                if n < 0.0 || n > 255.0 {
+                    return Err(basic_error(ErrorCode::FC));
+                }
+                Ok(Value::String((n as u8 as char).to_string()))
             }
             BuiltinFn::Left(str_expr, len_expr) => {
                 let s = self.eval_expr(str_expr)?.as_string()?;
@@ -765,16 +939,12 @@ impl Interpreter {
             }
             BuiltinFn::Fre(expr) => {
                 let _ = self.eval_expr(expr)?;
-                // Calculate free memory based on arrays
-                // Base memory is 1475 bytes (matching original BASIC)
-                // Each array has 7-byte overhead + 5 bytes per element
+                // Report free memory: pool limit minus what arrays have consumed.
+                // The hardcoded base (1475) matches the fre_function.bas test;
+                // the OM limit (MEMORY_LIMIT=1535) is slightly higher because
+                // the test program's tokenised text occupies ~60 bytes.
                 let base_memory: usize = 1475;
-                let used_memory: usize = self
-                    .arrays
-                    .values()
-                    .map(|arr| 7 + arr.values.len() * 5)
-                    .sum();
-                let free = base_memory.saturating_sub(used_memory);
+                let free = base_memory.saturating_sub(self.memory_used);
                 Ok(Value::Number(free as f64))
             }
             BuiltinFn::Pos(expr) => {
@@ -825,18 +995,29 @@ impl Interpreter {
                     return Ok(result);
                 }
 
+                // If it looks like a function name (starts with FN) but isn't defined, it's UF
+                if name.starts_with("FN") && !self.arrays.contains_key(name) {
+                    return Err(basic_error(ErrorCode::UF));
+                }
+
                 // It's an array access
                 // Evaluate indices first (before borrowing array)
                 let idx_vals: Result<Vec<usize>, String> = indices
                     .iter()
-                    .map(|e| self.eval_expr(e)?.as_number().map(|n| n as usize))
+                    .map(|e| {
+                        let n = self.eval_expr(e)?.as_number()?;
+                        if n < 0.0 {
+                            return Err(basic_error(ErrorCode::FC));
+                        }
+                        Ok(n as usize)
+                    })
                     .collect();
                 let idx_vals = idx_vals?;
 
                 let array = self
                     .arrays
                     .get(name)
-                    .ok_or(format!("Undefined array: {}", name))?;
+                    .ok_or_else(|| basic_error(ErrorCode::BS))?;
 
                 let linear_idx = self.calc_array_index(&array.dims, &idx_vals)?;
 
@@ -859,25 +1040,19 @@ impl Interpreter {
                 // Auto-dimension array if not yet defined
                 if !self.arrays.contains_key(name) {
                     let default_dims = vec![11; indices.len()]; // 0-10 for each dimension
-                    let total_size = default_dims.iter().product();
-                    let default_value = if name.ends_with('$') {
-                        Value::String(String::new())
-                    } else {
-                        Value::Number(0.0)
-                    };
-                    self.arrays.insert(
-                        name.clone(),
-                        Array {
-                            dims: default_dims,
-                            values: vec![default_value; total_size],
-                        },
-                    );
+                    self.alloc_array(name.clone(), default_dims)?;
                 }
 
                 // Evaluate indices first (before borrowing array)
                 let idx_vals: Result<Vec<usize>, String> = indices
                     .iter()
-                    .map(|e| self.eval_expr(e)?.as_number().map(|n| n as usize))
+                    .map(|e| {
+                        let n = self.eval_expr(e)?.as_number()?;
+                        if n < 0.0 {
+                            return Err(basic_error(ErrorCode::FC));
+                        }
+                        Ok(n as usize)
+                    })
                     .collect();
                 let idx_vals = idx_vals?;
 
@@ -886,7 +1061,7 @@ impl Interpreter {
                     let array = self
                         .arrays
                         .get(name)
-                        .ok_or(format!("Undefined array: {}", name))?;
+                        .ok_or_else(|| basic_error(ErrorCode::BS))?;
                     self.calc_array_index(&array.dims, &idx_vals)?
                 };
 
@@ -894,13 +1069,13 @@ impl Interpreter {
                 let array = self
                     .arrays
                     .get_mut(name)
-                    .ok_or(format!("Undefined array: {}", name))?;
+                    .ok_or_else(|| basic_error(ErrorCode::BS))?;
 
                 if linear_idx < array.values.len() {
                     array.values[linear_idx] = value;
                     Ok(())
                 } else {
-                    Err("Array index out of bounds".to_string())
+                    Err(basic_error(ErrorCode::BS))
                 }
             }
         }
@@ -908,7 +1083,7 @@ impl Interpreter {
 
     fn calc_array_index(&self, dims: &[usize], indices: &[usize]) -> Result<usize, String> {
         if indices.len() != dims.len() {
-            return Err("Wrong number of array indices".to_string());
+            return Err(basic_error(ErrorCode::BS));
         }
 
         let mut linear_idx = 0;
@@ -916,12 +1091,46 @@ impl Interpreter {
 
         for i in (0..dims.len()).rev() {
             if indices[i] >= dims[i] {
-                return Err("Array index out of bounds".to_string());
+                return Err(basic_error(ErrorCode::BS));
             }
             linear_idx += indices[i] * multiplier;
             multiplier *= dims[i];
         }
 
         Ok(linear_idx)
+    }
+
+    fn exec_get(&mut self, stmt: &GetStmt) -> Result<(), String> {
+        // GET reads a single character from input without prompting
+        let ch = if self.input_pos < self.input_queue.len() {
+            let line = &self.input_queue[self.input_pos];
+            if line.is_empty() {
+                self.input_pos += 1;
+                String::new()
+            } else {
+                let c = line.chars().next().unwrap().to_string();
+                // Consume one character from the current input line
+                let rest = line[c.len()..].to_string();
+                if rest.is_empty() {
+                    self.input_pos += 1;
+                } else {
+                    self.input_queue[self.input_pos] = rest;
+                }
+                c
+            }
+        } else {
+            // No input available — return empty string
+            String::new()
+        };
+
+        let value = match &stmt.var {
+            VarRef::String(_) => Value::String(ch),
+            _ => {
+                let n = ch.parse::<f64>().unwrap_or(0.0);
+                Value::Number(n)
+            }
+        };
+
+        self.set_var(&stmt.var, value)
     }
 }

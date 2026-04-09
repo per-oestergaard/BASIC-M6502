@@ -1,7 +1,8 @@
 //! Integration tests for the BASIC interpreter
 //!
-//! These tests verify that the built BASIC interpreter can execute
-//! simple BASIC programs correctly using the 6502 emulator harness.
+//! Tests are auto-discovered from tests/basic_programs/*.bas files.
+//! Any .bas file with a matching .expected file is automatically tested.
+//! This ensures parity with the basic_interpreter test suite.
 
 use emu6502::BasicHarness;
 use std::fs;
@@ -11,7 +12,6 @@ use tracing::info;
 
 static INIT: Once = Once::new();
 
-/// Initialize tracing once for all tests
 fn init_tracing() {
     INIT.call_once(|| {
         tracing_subscriber::fmt()
@@ -21,29 +21,55 @@ fn init_tracing() {
     });
 }
 
-/// Path to the interpreter binary (once built by the assembler)
 const INTERPRETER_BINARY: &str = "../build/original/basic.bin";
+const TEST_DIR: &str = "../tests/basic_programs";
 
 fn interpreter_exists() -> bool {
     PathBuf::from(INTERPRETER_BINARY).exists()
 }
 
-fn run_basic_program_with_inputs(
-    program_content: &str,
-    runtime_inputs: &[String],
-) -> Result<String, String> {
-    if !interpreter_exists() {
-        return Err(format!(
-            "Interpreter binary not found at {}. Build it with the assembler first.",
-            INTERPRETER_BINARY
-        ));
-    }
-    BasicHarness::run_apple_ii_basic_with_inputs(
-        INTERPRETER_BINARY,
-        program_content,
-        runtime_inputs,
-        50_000_000,
-    )
+/// Discover all test names by scanning the filesystem for .bas + .expected pairs
+/// Tests known to be incompatible with the original BASIC ROM.
+///
+/// These tests verify behaviour that the Rust interpreter enforces but the
+/// original ROM handles differently due to its internal memory architecture:
+///
+/// - `error_string_too_long`: The Rust interpreter enforces a hard 255-byte
+///    string length limit (LS error).  The ROM uses garbage-collected string
+///    storage that shares the same ~1.5 KB pool as variables and arrays, so
+///    the same concatenation typically hits an Out-of-Memory (OM) error before
+///    the 255-byte limit is ever checked.
+///
+/// - `error_formula_too_complex`: The Rust interpreter counts temporary
+///    string descriptors and raises ST after 15.  The ROM uses a 3-slot
+///    descriptor stack but frees temporaries eagerly between sub-expressions,
+///    so a long `A$+B$+C$+…` chain never actually fills the stack — each
+///    intermediate result is freed before the next concatenation.
+const EMU_EXCLUDED: &[&str] = &[
+    "error_string_too_long",
+    "error_formula_too_complex",
+];
+
+fn discover_test_names() -> Vec<String> {
+    let dir = PathBuf::from(TEST_DIR);
+    let mut names: Vec<String> = fs::read_dir(&dir)
+        .unwrap_or_else(|e| panic!("Cannot read {}: {}", dir.display(), e))
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            let path = entry.path();
+            if path.extension()? != "bas" {
+                return None;
+            }
+            let stem = path.file_stem()?.to_str()?.to_string();
+            if EMU_EXCLUDED.contains(&stem.as_str()) {
+                return None;
+            }
+            let expected_path = dir.join(format!("{}.expected", stem));
+            expected_path.exists().then_some(stem)
+        })
+        .collect();
+    names.sort();
+    names
 }
 
 fn read_optional_input_lines(base_path: &str) -> Vec<String> {
@@ -58,441 +84,82 @@ fn read_optional_input_lines(base_path: &str) -> Vec<String> {
         .collect()
 }
 
-/// Generic test runner: loads .bas + .expected files, runs and compares.
-fn test_basic_program(program_name: &str) {
-    init_tracing();
+/// Run a single test case and compare output
+fn run_and_compare(name: &str) {
+    let base_path = format!("{}/{}", TEST_DIR, name);
 
-    let base_path = format!("../tests/basic_programs/{}", program_name);
     let program = fs::read_to_string(format!("{}.bas", base_path))
-        .unwrap_or_else(|e| panic!("Failed to read {}.bas: {}", program_name, e));
+        .unwrap_or_else(|e| panic!("Failed to read {}.bas: {}", name, e));
+
     let expected = fs::read_to_string(format!("{}.expected", base_path))
-        .unwrap_or_else(|e| panic!("Failed to read {}.expected: {}", program_name, e));
+        .unwrap_or_else(|e| panic!("Failed to read {}.expected: {}", name, e));
+
     let runtime_inputs = read_optional_input_lines(&base_path);
 
     if !interpreter_exists() {
-        info!(
-            program = program_name,
-            "skipping test because interpreter binary is not built"
-        );
+        info!(program = name, "skipping: interpreter binary not built");
         return;
     }
 
-    match run_basic_program_with_inputs(&program, &runtime_inputs) {
-        Ok(output) => {
-            assert_eq!(
-                output.trim(),
-                expected.trim(),
-                "Output mismatch for {}\nExpected:\n{}\nGot:\n{}",
-                program_name,
-                expected.trim(),
-                output.trim()
-            );
-        }
-        Err(e) => panic!("Failed to run {}: {}", program_name, e),
-    }
+    let output = BasicHarness::run_apple_ii_basic_with_inputs(
+        INTERPRETER_BINARY,
+        &program,
+        &runtime_inputs,
+        50_000_000,
+    )
+    .unwrap_or_else(|e| panic!("Failed to run {}: {}", name, e));
+
+    assert_eq!(
+        output.trim(),
+        expected.trim(),
+        "Output mismatch for '{}'",
+        name,
+    );
 }
 
+/// Master test: discovers ALL .bas files with .expected counterparts
+/// and runs each one. Collects all failures before reporting.
 #[test]
-fn test_hello_world() {
-    test_basic_program("hello");
-}
-
-#[test]
-fn test_arithmetic() {
-    test_basic_program("arithmetic");
-}
-
-#[test]
-fn test_arrays() {
-    test_basic_program("arrays");
-}
-
-#[test]
-fn test_array_bounds_error() {
-    test_basic_program("array_bounds_error");
-}
-
-#[test]
-fn test_variables() {
-    test_basic_program("variables");
-}
-
-#[test]
-fn test_colon() {
-    test_basic_program("colon");
-}
-
-#[test]
-fn test_for_loop() {
-    test_basic_program("for_loop");
-}
-
-#[test]
-fn test_nested_for() {
-    test_basic_program("nested_for");
-}
-
-#[test]
-fn test_step_loop() {
-    test_basic_program("step_loop");
-}
-
-#[test]
-fn test_goto() {
-    test_basic_program("goto");
-}
-
-#[test]
-fn test_gosub() {
-    test_basic_program("gosub");
-}
-
-#[test]
-fn test_if_gosub() {
-    test_basic_program("if_gosub");
-}
-
-#[test]
-fn test_gosub_state() {
-    test_basic_program("gosub_state");
-}
-
-#[test]
-fn test_conditional() {
-    test_basic_program("conditional");
-}
-
-#[test]
-fn test_relops() {
-    test_basic_program("relops");
-}
-
-#[test]
-fn test_string() {
-    test_basic_program("string");
-}
-
-#[test]
-fn test_expressions() {
-    test_basic_program("expressions");
-}
-
-#[test]
-fn test_interpreter_binary_status() {
+fn all_basic_programs() {
     init_tracing();
-    if interpreter_exists() {
-        info!(path = INTERPRETER_BINARY, "interpreter binary found");
-    } else {
-        info!(path = INTERPRETER_BINARY, "interpreter binary not found");
+
+    let names = discover_test_names();
+    assert!(!names.is_empty(), "No test programs found in {}", TEST_DIR);
+
+    if !interpreter_exists() {
+        info!(path = INTERPRETER_BINARY, "interpreter binary not found — skipping all");
+        return;
     }
-}
 
-#[test]
-fn test_data_read() {
-    test_basic_program("data_read");
-}
-
-#[test]
-fn test_math_funcs() {
-    test_basic_program("math_funcs");
-}
-
-#[test]
-fn test_string_ops() {
-    test_basic_program("string_ops");
-}
-
-#[test]
-fn test_on_goto() {
-    test_basic_program("on_goto");
-}
-
-#[test]
-fn test_def_fn() {
-    test_basic_program("def_fn");
-}
-
-#[test]
-fn test_string_builtins() {
-    test_basic_program("string_builtins");
-}
-
-#[test]
-fn test_rem_statement() {
-    test_basic_program("rem_statement");
-}
-
-#[test]
-fn test_advanced_math() {
-    test_basic_program("advanced_math");
-}
-
-#[test]
-fn test_logic_ops() {
-    test_basic_program("logic_ops");
-}
-
-#[test]
-fn test_go_to_alias() {
-    test_basic_program("go_to_alias");
-}
-
-#[test]
-fn test_hello_repeat() {
-    test_basic_program("hello_repeat");
-}
-
-#[test]
-fn test_stars_banner() {
-    test_basic_program("stars_banner");
-}
-
-#[test]
-fn test_input_sum() {
-    test_basic_program("input_sum");
-}
-
-#[test]
-fn test_fibonacci_sequence() {
-    test_basic_program("fibonacci_sequence");
-}
-
-#[test]
-fn test_gcd_input() {
-    test_basic_program("gcd_input");
-}
-
-#[test]
-fn test_interactive_stars() {
-    test_basic_program("interactive_stars");
-}
-
-#[test]
-fn test_string_sort() {
-    test_basic_program("string_sort");
-}
-
-#[test]
-fn test_restore_smoke() {
-    test_basic_program("restore_smoke");
-}
-
-#[test]
-fn test_restore_read() {
-    test_basic_program("restore_read");
-}
-
-#[test]
-fn test_get_char() {
-    test_basic_program("get_char");
-}
-
-#[test]
-fn test_get_loop() {
-    test_basic_program("get_loop");
-}
-
-#[test]
-fn test_clear_state() {
-    test_basic_program("clear_state");
-}
-
-// ── Error Condition Tests ──────────────────────────────────────────────────────
-
-#[test]
-fn test_error_next_without_for() {
-    test_basic_program("error_next_without_for");
-}
-
-#[test]
-fn test_error_syntax() {
-    test_basic_program("error_syntax");
-}
-
-#[test]
-fn test_error_return_without_gosub() {
-    test_basic_program("error_return_without_gosub");
-}
-
-#[test]
-fn test_error_out_of_data() {
-    test_basic_program("error_out_of_data");
-}
-
-#[test]
-fn test_error_division_by_zero() {
-    test_basic_program("error_division_by_zero");
-}
-
-#[test]
-fn test_error_undef_statement() {
-    test_basic_program("error_undef_statement");
-}
-
-#[test]
-fn test_error_redim_array() {
-    test_basic_program("error_redim_array");
-}
-
-#[test]
-fn test_error_type_mismatch() {
-    test_basic_program("error_type_mismatch");
-}
-
-#[test]
-fn test_error_undef_function() {
-    test_basic_program("error_undef_function");
-}
-
-#[test]
-fn test_error_illegal_quantity() {
-    test_basic_program("error_illegal_quantity");
-}
-
-#[test]
-fn test_error_overflow() {
-    test_basic_program("error_overflow");
-}
-
-
-// The following errors exist in m6502.asm but are difficult to trigger in practice:
-// - ERRLS ("STRING TOO LONG"): Requires string concatenation result >= 256 chars
-// - ERRST ("FORMULA TOO COMPLEX"): Requires exhausting all string temporaries
-// These test files exist but the tests are commented out.
-
-// fn test_error_string_too_long() {
-//     test_basic_program("error_string_too_long");
-// }
-
-// #[test]
-// fn test_error_formula_too_complex() {
-//     test_basic_program("error_formula_too_complex");
-// }
-
-// ── Additional Feature Tests ───────────────────────────────────────────────────
-
-#[test]
-fn test_stop_statement() {
-    test_basic_program("stop_statement");
-}
-
-#[test]
-fn test_negative_step() {
-    test_basic_program("negative_step");
-}
-
-#[test]
-fn test_asc_chr() {
-    test_basic_program("asc_chr");
-}
-
-#[test]
-fn test_tab_function() {
-    test_basic_program("tab_function");
-}
-
-#[test]
-fn test_multiple_statements() {
-    test_basic_program("multiple_statements");
-}
-
-#[test]
-fn test_string_slicing() {
-    test_basic_program("string_slicing");
-}
-
-#[test]
-fn test_print_semicolon() {
-    test_basic_program("print_semicolon");
-}
-
-#[test]
-fn test_print_comma() {
-    test_basic_program("print_comma");
-}
-
-#[test]
-fn test_if_then_goto() {
-    test_basic_program("if_then_goto");
-}
-
-#[test]
-fn test_abs_int() {
-    test_basic_program("abs_int");
-}
-
-#[test]
-fn test_len_function() {
-    test_basic_program("len_function");
-}
-
-#[test]
-fn test_nested_if() {
-    test_basic_program("nested_if");
-}
-
-#[test]
-fn test_restore_data() {
-    test_basic_program("restore_data");
-}
-
-#[test]
-fn test_multiple_arrays() {
-    test_basic_program("multiple_arrays");
-}
-
-#[test]
-fn test_nested_gosub() {
-    test_basic_program("nested_gosub");
-}
-
-// ── Memory and System Functions ────────────────────────────────────────────────
-
-#[test]
-fn test_peek_poke() {
-    test_basic_program("peek_poke");
-}
-
-#[test]
-fn test_fre_function() {
-    test_basic_program("fre_function");
-}
-
-#[test]
-fn test_pos_function() {
-    test_basic_program("pos_function");
-}
-
-#[test]
-fn test_spc_function() {
-    test_basic_program("spc_function");
-}
-
-// ── Conversion Functions ───────────────────────────────────────────────────────
-
-#[test]
-fn test_sgn_function() {
-    test_basic_program("sgn_function");
-}
-
-#[test]
-fn test_val_str() {
-    test_basic_program("val_str");
-}
-
-// ── Additional Coverage ────────────────────────────────────────────────────────
-
-#[test]
-fn test_new_command() {
-    test_basic_program("new_command");
-}
-
-#[test]
-fn test_implicit_let() {
-    test_basic_program("implicit_let");
-}
-
-#[test]
-fn test_nested_for_print() {
-    test_basic_program("nested_for_print");
+    let mut failures = Vec::new();
+
+    for name in &names {
+        let result = std::panic::catch_unwind(|| run_and_compare(name));
+        if let Err(e) = result {
+            let msg = if let Some(s) = e.downcast_ref::<String>() {
+                s.clone()
+            } else if let Some(s) = e.downcast_ref::<&str>() {
+                s.to_string()
+            } else {
+                "unknown panic".to_string()
+            };
+            failures.push((name.clone(), msg));
+        }
+    }
+
+    if !failures.is_empty() {
+        let report = failures
+            .iter()
+            .map(|(name, msg)| format!("  FAIL {}: {}", name, msg))
+            .collect::<Vec<_>>()
+            .join("\n");
+        panic!(
+            "\n{}/{} tests failed:\n{}\n",
+            failures.len(),
+            names.len(),
+            report
+        );
+    }
+
+    eprintln!("All {}/{} emu6502 tests passed", names.len(), names.len());
 }

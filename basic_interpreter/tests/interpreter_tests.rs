@@ -1,117 +1,104 @@
 //! Integration tests for the Rust BASIC interpreter
 //!
-//! These tests run BASIC programs from tests/basic_programs/ and compare
-//! the output with the expected output from .expected files.
+//! Tests are auto-discovered from tests/basic_programs/*.bas files.
+//! Any .bas file with a matching .expected file is automatically tested.
+//! This ensures parity with the emu6502 test suite — no test can be forgotten.
 
 use std::fs;
 use std::path::PathBuf;
 
-/// Read a BASIC program from file
-fn read_program(name: &str) -> String {
-    let path = PathBuf::from("../tests/basic_programs").join(format!("{}.bas", name));
-    fs::read_to_string(&path).expect(&format!("Failed to read {}", path.display()))
+const TEST_DIR: &str = "../tests/basic_programs";
+
+/// Discover all test names by scanning the filesystem for .bas files
+/// that have a corresponding .expected file.
+fn discover_test_names() -> Vec<String> {
+    let dir = PathBuf::from(TEST_DIR);
+    let mut names: Vec<String> = fs::read_dir(&dir)
+        .unwrap_or_else(|e| panic!("Cannot read {}: {}", dir.display(), e))
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            let path = entry.path();
+            if path.extension()? != "bas" {
+                return None;
+            }
+            let stem = path.file_stem()?.to_str()?.to_string();
+            // Only include if .expected file exists
+            let expected_path = dir.join(format!("{}.expected", stem));
+            expected_path.exists().then_some(stem)
+        })
+        .collect();
+    names.sort();
+    names
 }
 
-/// Read expected output from file
-fn read_expected(name: &str) -> String {
-    let path = PathBuf::from("../tests/basic_programs").join(format!("{}.expected", name));
-    fs::read_to_string(&path).expect(&format!("Failed to read {}", path.display()))
-}
+/// Run a single test case: load .bas, optional .input, compare against .expected
+fn run_and_compare(name: &str) {
+    let dir = PathBuf::from(TEST_DIR);
 
-/// Read optional input lines for programs that use INPUT statement
-fn read_input(name: &str) -> Vec<String> {
-    let path = PathBuf::from("../tests/basic_programs").join(format!("{}.input", name));
-    if path.exists() {
-        fs::read_to_string(&path)
-            .expect(&format!("Failed to read {}", path.display()))
+    let program = fs::read_to_string(dir.join(format!("{}.bas", name)))
+        .unwrap_or_else(|e| panic!("Failed to read {}.bas: {}", name, e));
+
+    let expected = fs::read_to_string(dir.join(format!("{}.expected", name)))
+        .unwrap_or_else(|e| panic!("Failed to read {}.expected: {}", name, e));
+
+    let input_path = dir.join(format!("{}.input", name));
+    let inputs: Vec<String> = if input_path.exists() {
+        fs::read_to_string(&input_path)
+            .unwrap_or_else(|e| panic!("Failed to read {}.input: {}", name, e))
             .lines()
             .map(|s| s.to_string())
             .collect()
     } else {
         Vec::new()
-    }
-}
-
-/// Run a BASIC program and return its output
-fn run_basic_program(name: &str) -> String {
-    let program = read_program(name);
-    let inputs = read_input(name);
-
-    basic_interpreter::run_program(&program, &inputs).unwrap_or_else(|e| format!("ERROR: {}", e))
-}
-
-/// Test helper macro to generate test functions
-macro_rules! basic_test {
-    ($name:ident) => {
-        #[test]
-        fn $name() {
-            let output = run_basic_program(stringify!($name));
-            let expected = read_expected(stringify!($name));
-            assert_eq!(
-                output.trim(),
-                expected.trim(),
-                "Output mismatch for {}",
-                stringify!($name)
-            );
-        }
     };
+
+    let output = basic_interpreter::run_program(&program, &inputs)
+        .unwrap_or_else(|e| format!("ERROR: {}", e));
+
+    assert_eq!(
+        output.trim(),
+        expected.trim(),
+        "Output mismatch for '{}'",
+        name,
+    );
 }
 
-// Generate tests for all basic programs (non-error cases)
-basic_test!(abs_int);
-basic_test!(advanced_math);
-basic_test!(arithmetic);
-basic_test!(arrays);
-basic_test!(asc_chr);
-basic_test!(clear_state);
-basic_test!(colon);
-basic_test!(conditional);
-basic_test!(data_read);
-basic_test!(def_fn);
-basic_test!(expressions);
-basic_test!(fibonacci_sequence);
-basic_test!(for_loop);
-basic_test!(fre_function);
-basic_test!(gcd_input);
-basic_test!(gosub);
-basic_test!(gosub_state);
-basic_test!(goto);
-basic_test!(go_to_alias);
-basic_test!(hello);
-basic_test!(hello_repeat);
-basic_test!(if_gosub);
-basic_test!(if_then_goto);
-basic_test!(implicit_let);
-basic_test!(input_sum);
-basic_test!(len_function);
-basic_test!(logic_ops);
-basic_test!(math_funcs);
-basic_test!(multiple_arrays);
-basic_test!(multiple_statements);
-basic_test!(negative_step);
-basic_test!(nested_for);
-basic_test!(nested_for_print);
-basic_test!(nested_gosub);
-basic_test!(nested_if);
-basic_test!(new_command);
-basic_test!(on_goto);
-basic_test!(peek_poke);
-basic_test!(pos_function);
-basic_test!(print_comma);
-basic_test!(print_semicolon);
-basic_test!(relops);
-basic_test!(rem_statement);
-basic_test!(restore_data);
-basic_test!(restore_read);
-basic_test!(restore_smoke);
-basic_test!(sgn_function);
-basic_test!(spc_function);
-basic_test!(step_loop);
-basic_test!(stop_statement);
-basic_test!(string);
-basic_test!(string_builtins);
-basic_test!(string_ops);
-basic_test!(string_slicing);
-basic_test!(tab_function);
-basic_test!(val_str);
-basic_test!(variables);
+/// Master test: discovers ALL .bas files with .expected counterparts
+/// and runs each one. Collects all failures before reporting.
+#[test]
+fn all_basic_programs() {
+    let names = discover_test_names();
+    assert!(!names.is_empty(), "No test programs found in {}", TEST_DIR);
+
+    let mut failures = Vec::new();
+
+    for name in &names {
+        let result = std::panic::catch_unwind(|| run_and_compare(name));
+        if let Err(e) = result {
+            let msg = if let Some(s) = e.downcast_ref::<String>() {
+                s.clone()
+            } else if let Some(s) = e.downcast_ref::<&str>() {
+                s.to_string()
+            } else {
+                "unknown panic".to_string()
+            };
+            failures.push((name.clone(), msg));
+        }
+    }
+
+    if !failures.is_empty() {
+        let report = failures
+            .iter()
+            .map(|(name, msg)| format!("  FAIL {}: {}", name, msg))
+            .collect::<Vec<_>>()
+            .join("\n");
+        panic!(
+            "\n{}/{} tests failed:\n{}\n",
+            failures.len(),
+            names.len(),
+            report
+        );
+    }
+
+    eprintln!("All {}/{} basic_interpreter tests passed", names.len(), names.len());
+}

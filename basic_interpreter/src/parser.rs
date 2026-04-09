@@ -38,6 +38,9 @@ pub enum Statement {
     Rem(String),
     Input(InputStmt),
     Poke(PokeStmt),
+    Get(GetStmt),
+    /// Deferred syntax error — raised only when the line is executed.
+    SyntaxError,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -149,6 +152,11 @@ pub struct PokeStmt {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct GetStmt {
+    pub var: VarRef,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum VarRef {
     Simple(String),
     String(String),
@@ -217,19 +225,34 @@ pub enum BuiltinFn {
 
 pub fn parse(source: &str) -> Result<Program, String> {
     let mut lexer = Lexer::new(source);
-    let tokens = lexer.tokenize()?;
+    let tokens = lexer.tokenize().map_err(|e| {
+        // Lexer errors are syntax errors — format with line 0 as fallback
+        if e.starts_with('?') { e } else { format!("?SN ERROR IN  0") }
+    })?;
     let mut parser = Parser::new(tokens);
+    // parse_program() never fails: line-level syntax errors are stored as
+    // Statement::SyntaxError and raised only when the line is executed.
     parser.parse_program()
 }
 
 struct Parser {
     tokens: Vec<Token>,
     pos: usize,
+    current_line_number: u32,
 }
 
 impl Parser {
     fn new(tokens: Vec<Token>) -> Self {
-        Self { tokens, pos: 0 }
+        Self {
+            tokens,
+            pos: 0,
+            current_line_number: 0,
+        }
+    }
+
+    /// Wrap an error with the current line number in BASIC error format
+    fn syntax_error(&self) -> String {
+        format!("?SN ERROR IN  {}", self.current_line_number)
     }
 
     fn parse_program(&mut self) -> Result<Program, String> {
@@ -242,7 +265,29 @@ impl Parser {
                 continue;
             }
 
-            lines.push(self.parse_line()?);
+            match self.parse_line() {
+                Ok(line) => lines.push(line),
+                Err(_) => {
+                    // Defer the syntax error to runtime: store a SyntaxError
+                    // statement so the error is only raised if the line is
+                    // actually executed (matching original BASIC behaviour).
+                    let line_number = self.current_line_number;
+                    // Skip remaining tokens on this line
+                    while !self.is_at_end()
+                        && self.current() != &Token::Newline
+                        && self.current() != &Token::Eof
+                    {
+                        self.advance();
+                    }
+                    if self.current() == &Token::Newline {
+                        self.advance();
+                    }
+                    lines.push(ProgramLine {
+                        line_number,
+                        statements: vec![Statement::SyntaxError],
+                    });
+                }
+            }
         }
 
         // Sort lines by line number
@@ -261,6 +306,8 @@ impl Parser {
             }
             _ => return Err(format!("Expected line number, got {:?}", self.current())),
         };
+
+        self.current_line_number = line_number;
 
         let mut statements = Vec::new();
 
@@ -326,14 +373,12 @@ impl Parser {
             Token::Rem => self.parse_rem(),
             Token::Input => self.parse_input(),
             Token::Poke => self.parse_poke(),
+            Token::Get => self.parse_get(),
             Token::Identifier(_) | Token::StringVar(_) | Token::ArrayVar(_) => {
                 // Implicit LET
                 self.parse_let_implicit()
             }
-            _ => Err(format!(
-                "Unexpected token in statement: {:?}",
-                self.current()
-            )),
+            _ => Err(self.syntax_error()),
         }
     }
 
@@ -402,6 +447,19 @@ impl Parser {
     fn parse_if(&mut self) -> Result<Statement, String> {
         self.advance(); // Skip IF
         let condition = self.parse_expression()?;
+
+        // Accept both IF...THEN and IF...GOTO syntax
+        if self.current() == &Token::Goto {
+            // IF expr GOTO line — simple conditional jump
+            self.advance();
+            let target = self.parse_line_number()?;
+            return Ok(Statement::If(IfStmt {
+                condition,
+                then_stmt: vec![Statement::Goto(GotoStmt { target })],
+                else_stmt: None,
+            }));
+        }
+
         self.expect(&Token::Then)?;
 
         let mut then_stmt = Vec::new();
@@ -531,6 +589,11 @@ impl Parser {
             let name = match self.current() {
                 Token::ArrayVar(n) | Token::Identifier(n) => {
                     let name = n.clone();
+                    self.advance();
+                    name
+                }
+                Token::StringVar(n) => {
+                    let name = format!("{}$", n);
                     self.advance();
                     name
                 }
@@ -725,16 +788,8 @@ impl Parser {
     }
 
     fn parse_rem(&mut self) -> Result<Statement, String> {
-        self.advance(); // Skip REM
-
-        // REM eats everything until end of line
-        let comment = String::new();
-        while self.current() != &Token::Newline && self.current() != &Token::Eof {
-            // Reconstruct the comment (this is a simplification)
-            self.advance();
-        }
-
-        Ok(Statement::Rem(comment))
+        self.advance(); // Skip REM (rest of line already consumed by lexer)
+        Ok(Statement::Rem(String::new()))
     }
 
     fn parse_input(&mut self) -> Result<Statement, String> {
@@ -780,6 +835,12 @@ impl Parser {
         Ok(Statement::Poke(PokeStmt { addr, value }))
     }
 
+    fn parse_get(&mut self) -> Result<Statement, String> {
+        self.advance(); // Skip GET
+        let var = self.parse_var_ref()?;
+        Ok(Statement::Get(GetStmt { var }))
+    }
+
     fn parse_var_ref(&mut self) -> Result<VarRef, String> {
         match self.current() {
             Token::Identifier(name) => {
@@ -790,7 +851,23 @@ impl Parser {
             Token::StringVar(name) => {
                 let n = name.clone();
                 self.advance();
-                Ok(VarRef::String(n))
+                // Check if followed by ( — this is a string array access like A$(I)
+                if self.current() == &Token::LeftParen {
+                    self.advance(); // consume (
+                    let mut indices = Vec::new();
+                    loop {
+                        indices.push(self.parse_expression()?);
+                        if self.current() == &Token::Comma {
+                            self.advance();
+                        } else {
+                            break;
+                        }
+                    }
+                    self.expect(&Token::RightParen)?;
+                    Ok(VarRef::Array(format!("{}$", n), indices))
+                } else {
+                    Ok(VarRef::String(n))
+                }
             }
             Token::ArrayVar(name) => {
                 let n = name.clone();
@@ -997,10 +1074,7 @@ impl Parser {
             Token::Left => self.parse_left(),
             Token::Right => self.parse_right(),
             Token::Mid => self.parse_mid(),
-            _ => Err(format!(
-                "Unexpected token in expression: {:?}",
-                self.current()
-            )),
+            _ => Err(self.syntax_error()),
         }
     }
 

@@ -1,0 +1,1 @@
+10 IF 1>0 PRINT "YES"

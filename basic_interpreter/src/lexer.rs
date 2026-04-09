@@ -66,6 +66,7 @@ pub enum Token {
     Pos,
     Peek,
     Poke,
+    Get,
 
     // Operators
     Plus,
@@ -196,6 +197,13 @@ impl Lexer {
             '*' => Ok(Token::Star),
             '/' => Ok(Token::Slash),
             '^' => Ok(Token::Caret),
+            '\'' => {
+                // Single quote is an alias for REM - consume rest of line
+                while !self.is_at_end() && self.current() != '\n' {
+                    self.advance();
+                }
+                Ok(Token::Rem)
+            }
             '=' => Ok(Token::Equal),
             '<' => {
                 if !self.is_at_end() && self.current() == '>' {
@@ -297,8 +305,15 @@ impl Lexer {
             "STOP" => Token::Stop,
             "CLEAR" => Token::Clear,
             "NEW" => Token::New,
-            "REM" => Token::Rem,
+            "REM" => {
+                // REM consumes rest of the line (handles chars like ' that aren't valid tokens)
+                while !self.is_at_end() && self.current() != '\n' {
+                    self.advance();
+                }
+                return Ok(Token::Rem);
+            }
             "INPUT" => Token::Input,
+            "GET" => Token::Get,
             "ABS" => Token::Abs,
             "ATN" => Token::Atn,
             "COS" => Token::Cos,

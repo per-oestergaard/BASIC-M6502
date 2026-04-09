@@ -51,6 +51,18 @@ Internet-inspired example fixtures:
 Input-driven fixtures may include a matching `.input` file. Each line in that file is delivered as one line of terminal input after `RUN` begins.
 For `GET`-driven fixtures, those checked-in input characters are also exposed through the Apple II character-input hook.
 
+## Emulator-Excluded Tests
+
+Two tests are run only by the Rust interpreter and skipped by the emulator
+suite (the `EMU_EXCLUDED` list in `emu6502/tests/interpreter_tests.rs`).
+They test behaviour that is correct in the Rust interpreter but that the
+original ROM handles differently:
+
+| Test | Rust error | Why the ROM differs |
+|------|-----------|---------------------|
+| `error_string_too_long` | `?LS ERROR` — hard 255-byte limit | ROM shares string storage with the ~1.5 KB variable pool; the same concatenation hits `?OM ERROR` (out of memory) before the 255-byte limit is checked. |
+| `error_formula_too_complex` | `?ST ERROR` — 15-temp limit | ROM uses a 3-slot temp-descriptor stack but frees temporaries eagerly between sub-expressions, so a long `A$+B$+…` chain never fills the stack. |
+
 ## Running Tests
 
 Once the interpreter binary is available, tests can be run using:

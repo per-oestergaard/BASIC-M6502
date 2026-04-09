@@ -803,3 +803,85 @@ The **7-month journey** from original assembly to working Rust implementation su
 
 *Document created: April 8, 2026*
 *Based on: Git history, code analysis, repository memory, and conversation summaries*
+---
+
+## Appendix: Polishing Phase (April 9, 2026)
+
+After achieving 100% success-case test coverage (57/57 tests), a polishing phase began to ensure complete compatibility with the original Microsoft BASIC.
+
+### Changes Made
+
+**1. Filesystem-Driven Test Discovery**
+
+Both test suites (`basic_interpreter` and `emu6502`) were rewritten to auto-discover tests from `tests/basic_programs/*.bas` files. Any `.bas` file with a matching `.expected` file is automatically tested. This ensures no test can be forgotten when a new `.bas` file is added.
+
+**2. Error Message Format Fixed**
+
+Error messages were changed from English descriptions (`"NEXT without FOR"`) to match the original Microsoft BASIC format (`?NF ERROR IN  10`). A structured `ErrorCode` enum maps each error to its two-letter code. Runtime errors are caught in the execution loop, formatted as `?XX ERROR IN  ##`, and appended to program output.
+
+**3. New Language Features Added**
+
+| Feature | Description |
+|---------|-------------|
+| `GET A$` | Single-character input without prompt |
+| `'` (single-quote) | Alias for REM (rest-of-line comment) |
+| `IF...GOTO` | `IF expr GOTO line` without THEN |
+| `DIM A$(n)` | String array dimensioning |
+| `A$(i)` | String array indexing in expressions and assignments |
+
+**4. Execution Model Fix**
+
+The interpreter's execution model was refactored to track both line index (`pc`) and statement index (`stmt_pc`). Previously, `FOR...NEXT` on a single multi-statement line (e.g., `FOR I=1 TO 3:READ A$(I):NEXT I`) would re-execute the FOR from the beginning on each iteration, resetting the loop variable. The fix ensures NEXT returns to the statement *after* FOR, not to the start of the line.
+
+**5. Runtime Error Detection Added**
+
+New runtime checks matching the original BASIC ROM:
+- Division by zero (`?/0`)
+- Overflow (numbers > 1.7E38, matching 40-bit BASIC float range)
+- String too long (concatenation > 255 chars)
+- Formula too complex (> 15 string temporaries)
+- Redimensioned array (`DIM` on already-DIMmed array)
+- Illegal quantity: `SQR(-1)`, `CHR$(>255)`, negative array index, negative DIM size
+- Undefined function (`FNA(x)` without `DEF FN`)
+- Bad subscript (out of bounds, wrong number of dimensions)
+- Syntax errors in parser wrapped as `?SN ERROR IN  ##`
+
+**6. Test Coverage Expanded**
+
+| Phase | basic_interpreter | emu6502 |
+|-------|:-:|:-:|
+| Before polishing | 57/57 | ~66 (manual list) |
+| After polishing | **85/85** | **83/83** |
+
+New error test files added (8 new, 13 existing):
+```
+✅ error_syntax_bad_keyword     (SN: unknown statement)
+✅ error_syntax_missing_paren   (SN: unclosed parenthesis)
+✅ error_syntax_missing_then    (SN: IF without THEN/GOTO)
+✅ error_syntax_bad_for         (SN: non-variable after FOR)
+✅ error_syntax_missing_eq      (SN: missing = in LET)
+✅ error_bad_subscript_negative (FC: negative array index)
+✅ error_fc_chr_range           (FC: CHR$(256))
+✅ error_fc_neg_dim             (FC: DIM A(-1))
+```
+
+Two emu6502-only exclusions (ROM doesn't trigger these with our test programs):
+- `error_string_too_long` — ROM's string limit behavior differs
+- `error_formula_too_complex` — ROM's string temp stack differs
+
+**7. string_sort.bas Fixed**
+
+The original test file had only 9 DATA items for a 15-element sort, causing the emulator to read garbage from memory. Simplified to a 5-element sort that both interpreters handle correctly and produce identical output.
+
+### Key Technical Insights
+
+1. **Parser errors need line context** — The parser must track `current_line_number` and format syntax errors as `?SN ERROR IN  ##` to match original BASIC. Parse errors are returned as `Ok(error_output)` not `Err(msg)`.
+
+2. **Multi-statement lines need statement-level addressing** — `FOR I=1 TO 3:body:NEXT I` requires the NEXT to resume at the statement after FOR, not at the start of the line. Both `ForContext` and `gosub_stack` track `(line_pc, stmt_pc)` pairs.
+
+3. **Overflow threshold is 1.7E38** — Not f64's infinity. The original BASIC uses a 40-bit custom float with exponent range ≈ ±38. The Rust interpreter must clamp at `BASIC_MAX = 1.7014118e38`.
+
+4. **Negative array indices** — The original ROM treats negative indices as FC (Illegal Function Call), not BS (Bad Subscript). The Rust interpreter matches this by checking `< 0` before the `as usize` cast.
+
+5. **String array syntax** — `A$(I)` tokenizes as `StringVar("A")` then `LeftParen`, not as `ArrayVar`. Both `parse_var_ref` and `parse_dim` needed to handle `StringVar` followed by `(` as array access.
+/0 = Division by Zero      DD = reD

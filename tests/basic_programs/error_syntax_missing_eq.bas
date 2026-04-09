@@ -1,0 +1,2 @@
+10 FOR I 5 TO 10
+20 NEXT I
