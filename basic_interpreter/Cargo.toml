@@ -1,0 +1,11 @@
+[package]
+name = "basic_interpreter"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bnf = "0.6.0"
+tracing = "0.1"
+
+[dev-dependencies]
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

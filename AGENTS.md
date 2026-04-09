@@ -83,3 +83,64 @@ __LJ0:
 As the emulator is finished, the next step is to implement the BASIC interpreter in Rust. The interpreter must read and interpret BASIC directly. E.g., it has not benefit from using the assembler nor the emulator.
 
 The interpreter is its own crate. The success criteria is to run the same suite of BASIC test (in tests/basic_programs/) and get the same output as the original BASIC interpreter. It should also support an interactive mode and the same commands as emu6502/examples/interactive.rs.
+
+### Implementation decisions
+
+1. **Development approach**: Test-Driven Development (TDD)
+   - Start with all tests failing
+   - Implement features incrementally until tests pass
+   - Order of implementation is not critical
+
+2. **Testing**:
+   - Use existing tests in `tests/basic_programs/*.bas` with `.expected` files
+   - Do NOT modify existing tests
+   - New tests can be added in a separate folder if needed
+   - Preserve all quirks from original (e.g., missing space in first PRINT)
+
+3. **Architecture**: Lexer → Parser → AST → Interpreter/Evaluator
+   - Try using the `bnf` crate for parsing first
+   - If `bnf` crate doesn't work out, write hand-written parser
+   - Array layout does NOT need to be binary-compatible with original
+   - Variable storage can be idiomatic Rust
+
+4. **Crate structure**:
+   - New crate: `basic_interpreter/` (alongside `emu6502/` and `assembler6502/`)
+   - NO dependencies on `emu6502` or `assembler6502`
+   - Should have `examples/interactive.rs` for REPL
+
+5. **Floating-point**: Use Rust's `f64`
+   - Accept minor rounding differences from original custom format
+   - Precision is good enough for all test cases
+
+6. **Compatibility**:
+   - Output must match original exactly (including whitespace, quirks)
+   - Error messages should be similar but don't need to be byte-identical
+   - Interactive mode should support same commands: RUN, LIST, NEW, LOAD, SAVE
+
+### Current Status
+
+**Progress: 57/57 tests passing (100%)** ✅
+
+**Completed:**
+- ✅ Basic lexer with keyword/identifier/number/string tokenization
+- ✅ Hand-written recursive descent parser (bnf crate not used - generates AST directly)
+- ✅ Core interpreter with variable storage and expression evaluation
+- ✅ PRINT statement with proper spacing, number formatting, and trailing space trimming
+- ✅ LET, IF/THEN/ELSE, FOR/NEXT, GOTO, GOSUB/RETURN
+- ✅ DIM arrays, READ/DATA/RESTORE
+- ✅ ON GOTO/GOSUB, DEF FN (user functions)
+- ✅ Mathematical functions: ABS, SIN, COS, TAN, ATN, EXP, LOG, SQR, INT, SGN
+- ✅ String functions: ASC, CHR$, LEFT$, RIGHT$, MID$, LEN, STR$, VAL
+- ✅ System functions: FRE (array-based memory calculation), POS (print column tracking), PEEK/POKE (HashMap memory)
+- ✅ Relational and logical operators
+- ✅ Array auto-dimensioning
+- ✅ PRINT comma zoning (14-character zones)
+- ✅ CHR$, STR$, LEFT$, RIGHT$, MID$ parsing (string-typed function names)
+- ✅ STOP statement "BREAK IN <line>" message
+- ✅ DEF FN with function names containing parentheses
+- ✅ PRINT semicolon spacing (double space after numbers)
+- ✅ CLEAR statement (clears variables and arrays)
+- ✅ NEW command (resets entire state and outputs "OK")
+- ✅ Interactive REPL with RUN, LIST, NEW, LOAD, SAVE commands
+
+**Implementation complete!** All 57 test programs from tests/basic_programs/ pass with exact output matching.
